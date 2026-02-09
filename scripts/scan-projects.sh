@@ -15,7 +15,7 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-REGISTRY_FILE="$(dirname "$0")/../projects.json"
+REGISTRY_FILE="$(dirname "$0")/../osori.json"
 
 # Load existing names to avoid duplicates
 existing_names=""

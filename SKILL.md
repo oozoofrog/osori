@@ -9,13 +9,13 @@ description: "오소리 — 로컬 프로젝트 레지스트리 및 컨텍스트
 
 ## Registry
 
-`skills/osori/projects.json`
+`osori.json (워크스페이스 루트)`
 
 ## 프로젝트 찾기 (경로를 모를 때)
 
 프로젝트 경로를 모르면 다음 순서로 탐색:
 
-1. **레지스트리 검색** — `projects.json`에서 이름 fuzzy match
+1. **레지스트리 검색** — `osori.json`에서 이름 fuzzy match
 2. **mdfind 탐색** — `mdfind "kMDItemFSName == '<name>'" | head -5`
 3. **find 탐색** — `find /Volumes/eyedisk/develop ~/Developer -maxdepth 4 -type d -name '<name>' 2>/dev/null`
 4. **사용자에게 질문** — 위 방법으로 못 찾으면 "프로젝트 경로를 알려주세요" 요청
@@ -26,7 +26,7 @@ description: "오소리 — 로컬 프로젝트 레지스트리 및 컨텍스트
 ### 목록 (list)
 레지스트리의 모든 프로젝트 표시. `--tag`, `--lang` 필터 가능.
 ```
-projects.json 읽어서 테이블 형태로 출력
+osori.json 읽어서 테이블 형태로 출력
 ```
 
 ### 전환 (switch)
@@ -52,7 +52,7 @@ bash skills/osori/scripts/scan-projects.sh <root-dir> [--depth 3]
 디렉토리 일괄 스캔 후 레지스트리에 추가.
 
 ### 제거 (remove)
-`projects.json`에서 이름으로 항목 삭제.
+`osori.json`에서 이름으로 항목 삭제.
 
 ### 상태 (status)
 하나 또는 모든 프로젝트의 `git status` + `gh issue list` 실행.

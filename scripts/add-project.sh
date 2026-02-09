@@ -18,7 +18,7 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-REGISTRY_FILE="$(dirname "$0")/../projects.json"
+REGISTRY_FILE="$(dirname "$0")/../osori.json"
 
 # Init registry if missing
 if [[ ! -f "$REGISTRY_FILE" ]]; then
