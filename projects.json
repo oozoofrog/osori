@@ -1,0 +1,233 @@
+[
+  {
+    "name": "agent-avengers",
+    "path": "/Volumes/eyedisk/develop/agent-avengers",
+    "repo": "oozoofrog/agent-avengers",
+    "lang": "typescript",
+    "tags": [
+      "develop"
+    ],
+    "description": "올인원 멀티에이전트 오케스트레이션 - 자동 분해, 생성, 실행, 통합",
+    "addedAt": "2026-02-10"
+  },
+  {
+    "name": "mcp-baepsae",
+    "path": "/Volumes/eyedisk/develop/mcp-baepsae",
+    "repo": "oozoofrog/mcp-baepsae",
+    "lang": "typescript",
+    "tags": [
+      "develop"
+    ],
+    "description": "Local MCP server for iOS Simulator and macOS app automation with a native Swift bridge",
+    "addedAt": "2026-02-10"
+  },
+  {
+    "name": "swift",
+    "path": "/Volumes/eyedisk/develop/swiftlang/swift",
+    "repo": "swiftlang/swift",
+    "lang": "unknown",
+    "tags": [
+      "swiftlang"
+    ],
+    "description": "",
+    "addedAt": "2026-02-10"
+  },
+  {
+    "name": "Tesella",
+    "path": "/Volumes/eyedisk/develop/oozoofrog/Tesella",
+    "repo": "oozoofrog/Mosaify",
+    "lang": "typescript",
+    "tags": [
+      "oozoofrog"
+    ],
+    "description": "",
+    "addedAt": "2026-02-10"
+  },
+  {
+    "name": "Textify",
+    "path": "/Volumes/eyedisk/develop/oozoofrog/Textify",
+    "repo": "oozoofrog/Textify",
+    "lang": "unknown",
+    "tags": [
+      "oozoofrog"
+    ],
+    "description": "",
+    "addedAt": "2026-02-10"
+  },
+  {
+    "name": "Unicody",
+    "path": "/Volumes/eyedisk/develop/oozoofrog/Unicody",
+    "repo": "oozoofrog/Unicody",
+    "lang": "unknown",
+    "tags": [
+      "oozoofrog"
+    ],
+    "description": "",
+    "addedAt": "2026-02-10"
+  },
+  {
+    "name": "swiftlens",
+    "path": "/Volumes/eyedisk/develop/oozoofrog/swiftlens",
+    "repo": "oozoofrog/swiftlens",
+    "lang": "python",
+    "tags": [
+      "oozoofrog"
+    ],
+    "description": "",
+    "addedAt": "2026-02-10"
+  },
+  {
+    "name": "llm-settings",
+    "path": "/Volumes/eyedisk/develop/oozoofrog/llm-settings",
+    "repo": "oozoofrog/claude-agents-skills",
+    "lang": "unknown",
+    "tags": [
+      "oozoofrog"
+    ],
+    "description": "",
+    "addedAt": "2026-02-10"
+  },
+  {
+    "name": "claude-github-sync",
+    "path": "/Volumes/eyedisk/develop/oozoofrog/claude-github-sync",
+    "repo": "oozoofrog/claude-github-sync",
+    "lang": "unknown",
+    "tags": [
+      "oozoofrog"
+    ],
+    "description": "",
+    "addedAt": "2026-02-10"
+  },
+  {
+    "name": "RunnersHeart",
+    "path": "/Volumes/eyedisk/develop/oozoofrog/RunnersHeart",
+    "repo": "oozoofrog/RunnersHeart",
+    "lang": "unknown",
+    "tags": [
+      "oozoofrog"
+    ],
+    "description": "",
+    "addedAt": "2026-02-10"
+  },
+  {
+    "name": "easy-stitch",
+    "path": "/Volumes/eyedisk/develop/oozoofrog/easy-stitch",
+    "repo": "oozoofrog/easy-stitch",
+    "lang": "unknown",
+    "tags": [
+      "oozoofrog"
+    ],
+    "description": "",
+    "addedAt": "2026-02-10"
+  },
+  {
+    "name": "nvimstudy",
+    "path": "/Volumes/eyedisk/develop/oozoofrog/nvimstudy",
+    "repo": "",
+    "lang": "unknown",
+    "tags": [
+      "oozoofrog"
+    ],
+    "description": "",
+    "addedAt": "2026-02-10"
+  },
+  {
+    "name": "themes",
+    "path": "/Volumes/eyedisk/develop/oozoofrog/themes",
+    "repo": "oozoofrog/low-vision-ide-theme",
+    "lang": "unknown",
+    "tags": [
+      "oozoofrog"
+    ],
+    "description": "",
+    "addedAt": "2026-02-10"
+  },
+  {
+    "name": "PhotoCleaner",
+    "path": "/Volumes/eyedisk/develop/oozoofrog/PhotoCleaner",
+    "repo": "oozoofrog/PhotoCleaner",
+    "lang": "unknown",
+    "tags": [
+      "oozoofrog"
+    ],
+    "description": "",
+    "addedAt": "2026-02-10"
+  },
+  {
+    "name": "ghostty",
+    "path": "/Volumes/eyedisk/develop/oozoofrog/ghostty",
+    "repo": "oozoofrog/ghostty",
+    "lang": "unknown",
+    "tags": [
+      "oozoofrog"
+    ],
+    "description": "",
+    "addedAt": "2026-02-10"
+  },
+  {
+    "name": "AllWeathers",
+    "path": "/Volumes/eyedisk/develop/oozoofrog/AllWeathers",
+    "repo": "",
+    "lang": "unknown",
+    "tags": [
+      "oozoofrog"
+    ],
+    "description": "",
+    "addedAt": "2026-02-10"
+  },
+  {
+    "name": "TalkiOSDashboard",
+    "path": "/Volumes/eyedisk/develop/kakao/TalkiOSDashboard",
+    "repo": "",
+    "lang": "unknown",
+    "tags": [
+      "kakao"
+    ],
+    "description": "",
+    "addedAt": "2026-02-10"
+  },
+  {
+    "name": "lib-imagefilter-ios",
+    "path": "/Volumes/eyedisk/develop/kakao/lib-imagefilter-ios",
+    "repo": "",
+    "lang": "swift",
+    "tags": [
+      "kakao"
+    ],
+    "description": "",
+    "addedAt": "2026-02-10"
+  },
+  {
+    "name": "SwiftLayout",
+    "path": "/Volumes/eyedisk/develop/kakao/SwiftLayout",
+    "repo": "ioskrew/SwiftLayout",
+    "lang": "swift",
+    "tags": [
+      "kakao"
+    ],
+    "description": "",
+    "addedAt": "2026-02-10"
+  },
+  {
+    "name": "WeeklyAgent",
+    "path": "/Volumes/eyedisk/develop/kakao/WeeklyAgent",
+    "repo": "",
+    "lang": "unknown",
+    "tags": [
+      "kakao"
+    ],
+    "description": "",
+    "addedAt": "2026-02-10"
+  },
+  {
+    "name": "talk",
+    "path": "/Volumes/eyedisk/develop/kakao/talk",
+    "repo": "",
+    "lang": "unknown",
+    "tags": [
+      "kakao"
+    ],
+    "description": "",
+    "addedAt": "2026-02-10"
+  }
+]
