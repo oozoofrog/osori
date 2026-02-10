@@ -1,12 +1,11 @@
 ---
 name: osori
-description: "Osori — Local project registry & context loader. Find, switch, list, add/remove projects, check status. | 오소리 — 로컬 프로젝트 레지스트리 및 컨텍스트 로더. Triggers: 프로젝트 찾아, 프로젝트 목록, 작업하자, 프로젝트 추가, 프로젝트 상태, work on X, find project X, list projects, project status, project switch."
+description: "Osori — Local project registry & context loader. Find, switch, list, add/remove projects, check status. Triggers: work on X, find project X, list projects, project status, project switch. | 오소리 — 로컬 프로젝트 레지스트리. 프로젝트 찾아, 프로젝트 목록, 작업하자, 프로젝트 추가, 프로젝트 상태."
 ---
 
-# 오소리 (Osori)
+# Osori (오소리)
 
-Local project registry & context loader.
-로컬 프로젝트 레지스트리 및 컨텍스트 로더.
+Local project registry & context loader for AI agents.
 
 ## Prerequisites
 
@@ -15,61 +14,61 @@ Local project registry & context loader.
 
 ## Dependencies
 
-- **python3** — 필수. JSON 처리에 사용.
-- **git** — 프로젝트 감지 및 상태 확인.
+- **python3** — Required. Used for JSON processing.
+- **git** — Project detection and status checks.
 
 ## Registry
 
 `${OSORI_REGISTRY:-$HOME/.openclaw/osori.json}`
 
-환경변수 `OSORI_REGISTRY`로 커스텀 경로 설정 가능.
+Override with the `OSORI_REGISTRY` environment variable.
 
-## 프로젝트 찾기 (경로를 모를 때)
+## Finding Projects (when path is unknown)
 
-프로젝트 경로를 모르면 다음 순서로 탐색:
+When the project path is unknown, search in order:
 
-1. **레지스트리 검색** — `osori.json`에서 이름 fuzzy match
-2. **mdfind 탐색** (macOS) — `mdfind "kMDItemFSName == '<name>'" | head -5`
-3. **find 탐색** — `OSORI_SEARCH_PATHS` 환경변수에 지정된 경로를 탐색. 미설정 시 사용자에게 검색 경로를 질문.
+1. **Registry lookup** — Fuzzy match name in `osori.json`
+2. **mdfind** (macOS only) — `mdfind "kMDItemFSName == '<name>'" | head -5`
+3. **find fallback** — Search paths defined in `OSORI_SEARCH_PATHS` env var. If unset, ask the user for search paths.
    `find <search_paths> -maxdepth 4 -type d -name '<name>' 2>/dev/null`
-4. **사용자에게 질문** — 위 방법으로 못 찾으면 "프로젝트 경로를 알려주세요" 요청
-5. 찾으면 자동으로 레지스트리에 등록 제안
+4. **Ask the user** — If all methods fail, ask for the project path directly.
+5. Offer to register the found project in the registry.
 
 ## Commands
 
-### 목록 (list)
-레지스트리의 모든 프로젝트 표시. `--tag`, `--lang` 필터 가능.
+### List
+Show all registered projects. Supports `--tag`, `--lang` filters.
 ```
-osori.json 읽어서 테이블 형태로 출력
+Read osori.json and display as a table.
 ```
 
-### 전환 (switch)
-1. 레지스트리에서 프로젝트 검색 (fuzzy match)
-2. 없으면 → 위 "프로젝트 찾기" 흐름 실행
-3. 찾으면 컨텍스트 로드:
+### Switch
+1. Search registry (fuzzy match)
+2. If not found → run "Finding Projects" flow above
+3. Load context:
    - `git status --short`
    - `git branch --show-current`
    - `git log --oneline -5`
-   - `gh issue list -R <repo> --limit 5` (repo 있을 때)
-4. 요약 출력
+   - `gh issue list -R <repo> --limit 5` (when repo is set)
+4. Present summary
 
-### 추가 (add)
+### Add
 ```bash
 bash skills/osori/scripts/add-project.sh <path> [--tag <tag>] [--name <name>]
 ```
-Auto-detect: git remote, language, description.
+Auto-detects: git remote, language, description.
 
-### 스캔 (scan)
+### Scan
 ```bash
 bash skills/osori/scripts/scan-projects.sh <root-dir> [--depth 3]
 ```
-디렉토리 일괄 스캔 후 레지스트리에 추가.
+Bulk-scan a directory for git repos and add them to the registry.
 
-### 제거 (remove)
-`osori.json`에서 이름으로 항목 삭제.
+### Remove
+Delete an entry from `osori.json` by name.
 
-### 상태 (status)
-하나 또는 모든 프로젝트의 `git status` + `gh issue list` 실행.
+### Status
+Run `git status` + `gh issue list` for one or all projects.
 
 ## Schema
 
@@ -85,10 +84,10 @@ bash skills/osori/scripts/scan-projects.sh <root-dir> [--depth 3]
 }
 ```
 
-## 자동 트리거 규칙 / Auto-trigger Rules
+## Auto-trigger Rules
 
-- "X 프로젝트 작업하자" / "work on X" → switch X
-- "X 찾아줘" / "X 경로" / "find project X" → 레지스트리 검색 or 탐색
-- "프로젝트 목록" / "list projects" → list
-- "프로젝트 추가" → add
-- "프로젝트 상태" / "project status" → status all
+- "work on X" / "X 프로젝트 작업하자" → switch X
+- "find project X" / "X 찾아줘" / "X 경로" → registry search or discover
+- "list projects" / "프로젝트 목록" → list
+- "add project" / "프로젝트 추가" → add
+- "project status" / "프로젝트 상태" → status all
