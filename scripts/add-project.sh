@@ -18,7 +18,10 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-REGISTRY_FILE="$(dirname "$0")/../osori.json"
+REGISTRY_FILE="${OSORI_REGISTRY:-$HOME/.openclaw/osori.json}"
+
+# Ensure parent directory exists
+mkdir -p "$(dirname "$REGISTRY_FILE")"
 
 # Init registry if missing
 if [[ ! -f "$REGISTRY_FILE" ]]; then
@@ -33,48 +36,63 @@ if [[ "$REMOTE" =~ github\.com[:/]([^/]+/[^/.]+) ]]; then
 fi
 
 # Detect language
-LANG="unknown"
-if [[ -f "$PROJECT_PATH/Package.swift" ]]; then LANG="swift"
-elif [[ -f "$PROJECT_PATH/package.json" ]]; then LANG="typescript"
-elif [[ -f "$PROJECT_PATH/Cargo.toml" ]]; then LANG="rust"
-elif [[ -f "$PROJECT_PATH/go.mod" ]]; then LANG="go"
-elif [[ -f "$PROJECT_PATH/pyproject.toml" ]] || [[ -f "$PROJECT_PATH/setup.py" ]]; then LANG="python"
+LANG_DETECTED="unknown"
+if [[ -f "$PROJECT_PATH/Package.swift" ]]; then LANG_DETECTED="swift"
+elif [[ -f "$PROJECT_PATH/package.json" ]]; then LANG_DETECTED="typescript"
+elif [[ -f "$PROJECT_PATH/Cargo.toml" ]]; then LANG_DETECTED="rust"
+elif [[ -f "$PROJECT_PATH/go.mod" ]]; then LANG_DETECTED="go"
+elif [[ -f "$PROJECT_PATH/pyproject.toml" ]] || [[ -f "$PROJECT_PATH/setup.py" ]]; then LANG_DETECTED="python"
 fi
 
-# Detect description
+# Detect description safely via stdin
 DESC=""
 if [[ -f "$PROJECT_PATH/package.json" ]]; then
-  DESC=$(python3 -c "import json; print(json.load(open('$PROJECT_PATH/package.json')).get('description',''))" 2>/dev/null || true)
+  DESC=$(python3 -c "import json,sys; print(json.load(sys.stdin).get('description',''))" < "$PROJECT_PATH/package.json" 2>/dev/null || true)
 fi
 
 TODAY=$(date +%Y-%m-%d)
-TAGS_JSON="[]"
-if [[ -n "$TAG" ]]; then
-  TAGS_JSON="[\"$TAG\"]"
-fi
 
-python3 -c "
-import json
-with open('$REGISTRY_FILE') as f:
+# Build and merge entry safely — all variables via environment, not shell interpolation
+OSORI_NAME="$NAME" \
+OSORI_PATH="$PROJECT_PATH" \
+OSORI_REPO="$REPO" \
+OSORI_LANG="$LANG_DETECTED" \
+OSORI_TAG="$TAG" \
+OSORI_DESC="$DESC" \
+OSORI_TODAY="$TODAY" \
+OSORI_REG="$REGISTRY_FILE" \
+python3 << 'PYEOF'
+import json, os
+
+reg_file = os.environ["OSORI_REG"]
+name = os.environ["OSORI_NAME"]
+path = os.environ["OSORI_PATH"]
+repo = os.environ["OSORI_REPO"]
+lang = os.environ["OSORI_LANG"]
+tag = os.environ["OSORI_TAG"]
+desc = os.environ["OSORI_DESC"]
+today = os.environ["OSORI_TODAY"]
+
+with open(reg_file) as f:
     data = json.load(f)
 
-# Check duplicate
 for p in data:
-    if p['name'] == '$NAME':
-        print(f'Already registered: $NAME')
+    if p["name"] == name:
+        print(f"Already registered: {name}")
         exit(0)
 
+tags = [tag] if tag else []
 data.append({
-    'name': '$NAME',
-    'path': '$PROJECT_PATH',
-    'repo': '$REPO',
-    'lang': '$LANG',
-    'tags': json.loads('$TAGS_JSON'),
-    'description': '''$DESC''',
-    'addedAt': '$TODAY'
+    "name": name,
+    "path": path,
+    "repo": repo,
+    "lang": lang,
+    "tags": tags,
+    "description": desc,
+    "addedAt": today
 })
 
-with open('$REGISTRY_FILE', 'w') as f:
+with open(reg_file, "w") as f:
     json.dump(data, f, indent=2, ensure_ascii=False)
-print(f'Added: $NAME ($PROJECT_PATH)')
-"
+print(f"Added: {name} ({path})")
+PYEOF

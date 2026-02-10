@@ -13,9 +13,16 @@ Local project registry & context loader.
 - **macOS**: `mdfind` (Spotlight, built-in), `python3`, `git`, `gh` CLI
 - **Linux**: `mdfind` unavailable → uses `find` as fallback automatically. `python3`, `git`, `gh` CLI required.
 
+## Dependencies
+
+- **python3** — 필수. JSON 처리에 사용.
+- **git** — 프로젝트 감지 및 상태 확인.
+
 ## Registry
 
-`osori.json (워크스페이스 루트)`
+`${OSORI_REGISTRY:-$HOME/.openclaw/osori.json}`
+
+환경변수 `OSORI_REGISTRY`로 커스텀 경로 설정 가능.
 
 ## 프로젝트 찾기 (경로를 모를 때)
 
