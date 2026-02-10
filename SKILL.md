@@ -1,6 +1,6 @@
 ---
 name: osori
-description: "Osori — Local project registry & context loader. Find, switch, list, add/remove projects, check status. Triggers: work on X, find project X, list projects, project status, project switch. | 오소리 — 로컬 프로젝트 레지스트리. 프로젝트 찾아, 프로젝트 목록, 작업하자, 프로젝트 추가, 프로젝트 상태."
+description: "Osori v1.2.0 — Local project registry & context loader with Telegram slash commands. Find, switch, list, add/remove projects, check status. Triggers: work on X, find project X, list projects, project status, project switch. | 오소리 — 텔레그램 슬래시 명령어 지원 로컬 프로젝트 레지스트리."
 ---
 
 # Osori (오소리)
@@ -16,6 +16,46 @@ Local project registry & context loader for AI agents.
 
 - **python3** — Required. Used for JSON processing.
 - **git** — Project detection and status checks.
+
+## Telegram Bot Commands (New in v1.2.0)
+
+Osori now supports Telegram slash commands for quick project management:
+
+```
+/list — Show all registered projects
+/status — Check status of all projects
+/find <name> — Find a project by name
+/switch <name> — Switch to project and load context
+/add <path> — Add project to registry
+/remove <name> — Remove project from registry
+/scan <path> — Scan directory for git projects
+/help — Show command help
+```
+
+### Setup
+
+Add to your OpenClaw agent's TOOLS.md or Telegram bot config:
+
+```bash
+# In Telegram bot commands (BotFather)
+list - Show all projects
+status - Check project statuses
+find - Find project by name
+switch - Switch to project
+add - Add project to registry
+remove - Remove project
+scan - Scan directory
+help - Show help
+```
+
+### Usage Examples
+
+```
+/find agent-avengers
+/switch Tesella
+/add /Volumes/disk/MyProject
+/scan /Volumes/eyedisk/develop
+```
 
 ## Registry
 
