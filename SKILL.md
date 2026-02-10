@@ -1,11 +1,17 @@
 ---
 name: osori
-description: "오소리 — 로컬 프로젝트 레지스트리 및 컨텍스트 로더. Use when user asks to find a project, switch to a project, list projects, add/remove a project, check project status, or start working on a specific project. Triggers: 프로젝트 찾아, 프로젝트 목록, 작업하자, 프로젝트 추가, 프로젝트 상태, project list, project switch, project status."
+description: "Osori — Local project registry & context loader. Find, switch, list, add/remove projects, check status. | 오소리 — 로컬 프로젝트 레지스트리 및 컨텍스트 로더. Triggers: 프로젝트 찾아, 프로젝트 목록, 작업하자, 프로젝트 추가, 프로젝트 상태, work on X, find project X, list projects, project status, project switch."
 ---
 
 # 오소리 (Osori)
 
+Local project registry & context loader.
 로컬 프로젝트 레지스트리 및 컨텍스트 로더.
+
+## Prerequisites
+
+- **macOS**: `mdfind` (Spotlight, built-in), `python3`, `git`, `gh` CLI
+- **Linux**: `mdfind` unavailable → uses `find` as fallback automatically. `python3`, `git`, `gh` CLI required.
 
 ## Registry
 
@@ -16,8 +22,9 @@ description: "오소리 — 로컬 프로젝트 레지스트리 및 컨텍스트
 프로젝트 경로를 모르면 다음 순서로 탐색:
 
 1. **레지스트리 검색** — `osori.json`에서 이름 fuzzy match
-2. **mdfind 탐색** — `mdfind "kMDItemFSName == '<name>'" | head -5`
-3. **find 탐색** — `find /Volumes/eyedisk/develop ~/Developer -maxdepth 4 -type d -name '<name>' 2>/dev/null`
+2. **mdfind 탐색** (macOS) — `mdfind "kMDItemFSName == '<name>'" | head -5`
+3. **find 탐색** — `OSORI_SEARCH_PATHS` 환경변수에 지정된 경로를 탐색. 미설정 시 사용자에게 검색 경로를 질문.
+   `find <search_paths> -maxdepth 4 -type d -name '<name>' 2>/dev/null`
 4. **사용자에게 질문** — 위 방법으로 못 찾으면 "프로젝트 경로를 알려주세요" 요청
 5. 찾으면 자동으로 레지스트리에 등록 제안
 
@@ -71,10 +78,10 @@ bash skills/osori/scripts/scan-projects.sh <root-dir> [--depth 3]
 }
 ```
 
-## 자동 트리거 규칙
+## 자동 트리거 규칙 / Auto-trigger Rules
 
-- "X 프로젝트 작업하자" → switch X
-- "X 찾아줘" / "X 경로" → 레지스트리 검색 or 탐색
-- "프로젝트 목록" → list
+- "X 프로젝트 작업하자" / "work on X" → switch X
+- "X 찾아줘" / "X 경로" / "find project X" → 레지스트리 검색 or 탐색
+- "프로젝트 목록" / "list projects" → list
 - "프로젝트 추가" → add
-- "프로젝트 상태" → status all
+- "프로젝트 상태" / "project status" → status all
