@@ -320,6 +320,7 @@ import subprocess
 import sys
 
 sys.path.insert(0, os.environ["OSORI_SCRIPT_DIR"])
+from github_cache import DEFAULT_CACHE_PATH, get_open_count
 from registry_lib import (
     filter_projects,
     load_registry,
@@ -339,16 +340,34 @@ def run(cmd, timeout=8):
         return 1, "", str(e)
 
 
+try:
+    CACHE_TTL = int(os.environ.get("OSORI_CACHE_TTL", "600"))
+except Exception:
+    CACHE_TTL = 600
+CACHE_PATH = os.environ.get("OSORI_CACHE_FILE", DEFAULT_CACHE_PATH)
+
+
 def gh_count(kind, repo):
     if not repo or shutil.which("gh") is None:
         return "n/a"
-    rc, out, _ = run(["gh", kind, "list", "-R", repo, "--state", "open", "--json", "number", "--limit", "200"], timeout=12)
-    if rc != 0 or not out:
-        return "n/a"
-    try:
-        return str(len(json.loads(out)))
-    except Exception:
-        return "n/a"
+
+    def fetch():
+        rc, out, _ = run(["gh", kind, "list", "-R", repo, "--state", "open", "--json", "number", "--limit", "200"], timeout=12)
+        if rc != 0 or not out:
+            return None
+        try:
+            return len(json.loads(out))
+        except Exception:
+            return None
+
+    value, _state = get_open_count(
+        kind=kind,
+        repo=repo,
+        ttl_seconds=CACHE_TTL,
+        cache_path=CACHE_PATH,
+        fetch_open_count=fetch,
+    )
+    return value
 
 
 def git_last_commit(path):

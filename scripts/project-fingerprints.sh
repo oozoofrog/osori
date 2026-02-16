@@ -44,6 +44,7 @@ import sys
 from typing import List
 
 sys.path.insert(0, os.environ["OSORI_SCRIPT_DIR"])
+from github_cache import DEFAULT_CACHE_PATH, get_open_count
 from registry_lib import filter_projects, load_registry, parse_repo_from_remote, registry_projects
 
 
@@ -55,19 +56,35 @@ def run(cmd: List[str], timeout: int = 8):
         return 1, "", str(e)
 
 
+CACHE_PATH = os.environ.get("OSORI_CACHE_FILE", DEFAULT_CACHE_PATH)
+try:
+    CACHE_TTL = int(os.environ.get("OSORI_CACHE_TTL", "600"))
+except Exception:
+    CACHE_TTL = 600
+
+
 def gh_count(kind: str, repo: str):
     if not repo or shutil.which("gh") is None:
         return "n/a"
 
-    cmd = ["gh", kind, "list", "-R", repo, "--state", "open", "--json", "number", "--limit", "200"]
-    rc, out, _ = run(cmd, timeout=12)
-    if rc != 0 or not out:
-        return "n/a"
+    def fetch() -> int | None:
+        cmd = ["gh", kind, "list", "-R", repo, "--state", "open", "--json", "number", "--limit", "200"]
+        rc, out, _ = run(cmd, timeout=12)
+        if rc != 0 or not out:
+            return None
+        try:
+            return len(json.loads(out))
+        except Exception:
+            return None
 
-    try:
-        return str(len(json.loads(out)))
-    except Exception:
-        return "n/a"
+    value, _state = get_open_count(
+        kind=kind,
+        repo=repo,
+        ttl_seconds=CACHE_TTL,
+        cache_path=CACHE_PATH,
+        fetch_open_count=fetch,
+    )
+    return value
 
 
 query = os.environ.get("OSORI_QUERY", "").strip()
