@@ -122,7 +122,7 @@ def get_open_count(
     if not repo:
         return "n/a", "skip"
 
-    ttl = max(0, int(ttl_seconds))
+    ttl = int(ttl_seconds)
     cache = load_cache(cache_path)
     key = _cache_key(kind, repo)
     entry = cache.get("entries", {}).get(key)
@@ -131,7 +131,8 @@ def get_open_count(
     if isinstance(entry, dict):
         try:
             age = now - int(entry.get("fetchedAt", 0))
-            if age <= ttl:
+            # ttl<=0 means always refresh (never hit cache)
+            if ttl > 0 and age <= ttl:
                 return str(int(entry["value"])), "hit"
         except Exception:
             pass
