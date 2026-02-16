@@ -135,7 +135,7 @@ import os
 import sys
 
 sys.path.insert(0, os.environ["OSORI_SCRIPT_DIR"])
-from registry_lib import load_registry, registry_projects, save_registry, set_registry_projects
+from registry_lib import ensure_root_exists, load_registry, registry_projects, save_registry, set_registry_projects
 
 reg_file = os.environ["OSORI_REG"]
 with open(os.environ["OSORI_TMPFILE"], encoding="utf-8") as f:
@@ -150,6 +150,7 @@ added = 0
 for e in new_entries:
     if e.get("name") in existing_names:
         continue
+    e["root"] = ensure_root_exists(registry, e.get("root", "default"))
     projects.append(e)
     existing_names.add(e.get("name"))
     added += 1

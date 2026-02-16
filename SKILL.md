@@ -1,6 +1,6 @@
 ---
 name: osori
-description: "Osori v1.3.0 — Local project registry & context loader with Telegram slash commands. Registry versioning + auto-migration + fingerprints view. Find, switch, list, add/remove projects, check status. Triggers: work on X, find project X, list projects, project status, project switch. | 오소리 — 텔레그램 슬래시 명령어 지원 로컬 프로젝트 레지스트리."
+description: "Osori v1.3.1 — Local project registry & context loader with Telegram slash commands. Registry versioning + auto-migration + fingerprints view + root filters. Find, switch, list, add/remove projects, check status. Triggers: work on X, find project X, list projects, project status, project switch. | 오소리 — 텔레그램 슬래시 명령어 지원 로컬 프로젝트 레지스트리."
 ---
 
 # Osori (오소리)
@@ -17,19 +17,19 @@ Local project registry & context loader for AI agents.
 - **python3** — Required. Used for JSON processing.
 - **git** — Project detection and status checks.
 
-## Telegram Bot Commands (New in v1.2.0)
+## Telegram Bot Commands (Updated in v1.3.1)
 
 Osori now supports Telegram slash commands for quick project management:
 
 ```
-/list — Show all registered projects
-/status — Check status of all projects
+/list [root] — Show registered projects (optional root filter)
+/status [root] — Check status of projects (optional root filter)
 /find <name> — Find a project by name
 /switch <name> — Switch to project and load context
-/fingerprints [name] — Show repo remote + last commit + open PR/issue counts
+/fingerprints [name] [--root <root>] — Show repo remote + last commit + open PR/issue counts
 /add <path> — Add project to registry
 /remove <name> — Remove project from registry
-/scan <path> — Scan directory for git projects
+/scan <path> [root] — Scan directory for git projects, optional root key
 /help — Show command help
 ```
 
@@ -39,24 +39,27 @@ Add to your OpenClaw agent's TOOLS.md or Telegram bot config:
 
 ```bash
 # In Telegram bot commands (BotFather)
-list - Show all projects
-status - Check project statuses
+list - Show all projects (or by root)
+status - Check project statuses (or by root)
 find - Find project by name
 switch - Switch to project
+fingerprints - Show repo/commit/PR/issue fingerprint
 add - Add project to registry
 remove - Remove project
-scan - Scan directory
+scan - Scan directory (optional root)
 help - Show help
 ```
 
 ### Usage Examples
 
 ```
+/list work
+/status personal
 /find agent-avengers
 /switch Tesella
-/fingerprints Tesella
+/fingerprints Tesella --root personal
 /add /Volumes/disk/MyProject
-/scan /path/to/workspace
+/scan /path/to/workspace work
 ```
 
 ## Registry
@@ -65,7 +68,7 @@ help - Show help
 
 Override with the `OSORI_REGISTRY` environment variable.
 
-### Versioning & Migration (v1.3.0)
+### Versioning & Migration (v1.3.1)
 
 - Current schema: `osori.registry`
 - Current version: `2`
@@ -91,10 +94,13 @@ When the project path is unknown, search in order:
 ## Commands
 
 ### List
-Show all registered projects. Supports `--tag`, `--lang` filters.
+Show all registered projects. Optional root filter supported in Telegram command:
+
+```bash
+/list [root]
 ```
-Read osori.json and display as a table.
-```
+
+(Example: `/list work`)
 
 ### Switch
 1. Search registry (fuzzy match)
@@ -115,6 +121,7 @@ Show a one-shot project fingerprint view:
 
 ```bash
 bash skills/osori/scripts/project-fingerprints.sh [project-name]
+bash skills/osori/scripts/project-fingerprints.sh --root <root-key> [project-name]
 ```
 
 ### Add
@@ -126,14 +133,27 @@ Auto-detects: git remote, language, description.
 ### Scan
 ```bash
 bash skills/osori/scripts/scan-projects.sh <root-dir> [--depth 3]
+OSORI_ROOT_KEY=work bash skills/osori/scripts/scan-projects.sh <root-dir> [--depth 3]
 ```
 Bulk-scan a directory for git repos and add them to the registry.
+
+Telegram command supports optional root key too:
+
+```bash
+/scan <path> [root]
+```
 
 ### Remove
 Delete an entry from `osori.json` by name.
 
 ### Status
 Run `git status` + `gh issue list` for one or all projects.
+
+Telegram root filter:
+
+```bash
+/status [root]
+```
 
 ## Schema
 

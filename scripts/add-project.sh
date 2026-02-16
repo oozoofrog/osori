@@ -80,6 +80,7 @@ import sys
 
 sys.path.insert(0, os.environ["OSORI_SCRIPT_DIR"])
 from registry_lib import (
+    ensure_root_exists,
     load_registry,
     registry_projects,
     save_registry,
@@ -98,6 +99,7 @@ root_key = os.environ["OSORI_ROOT_KEY"] or "default"
 
 loaded = load_registry(reg_file, auto_migrate=True, make_backup_on_migrate=True)
 registry = loaded.registry
+resolved_root = ensure_root_exists(registry, root_key)
 projects = registry_projects(registry)
 
 for p in projects:
@@ -118,7 +120,7 @@ entry = {
     "tags": [tag] if tag else [],
     "description": desc,
     "addedAt": today,
-    "root": root_key,
+    "root": resolved_root,
 }
 
 projects.append(entry)

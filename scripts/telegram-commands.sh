@@ -20,42 +20,56 @@ show_help() {
     cat << 'EOF'
 🦦 *Osori Bot Commands*
 
-/list — Show all projects
-/status — Check all project statuses
+/list [root] — Show all projects (optionally filter by root)
+/status [root] — Check project statuses (optionally filter by root)
 /find <name> — Find a project path
 /switch <name> — Switch to project & load context
-/fingerprints [name] — Show repo/commit/PR/issue fingerprints
+/fingerprints [name] [--root <root>] — Show repo/commit/PR/issue fingerprints
 /add <path> — Add project to registry
 /remove <name> — Remove project from registry
-/scan <path> — Scan directory for projects
+/scan <path> [root] — Scan directory for projects (optional root key)
 /help — Show this help
 
 *Examples:*
+`/list work`
+`/status personal`
 `/find agent-avengers`
 `/switch Tesella`
-`/fingerprints Tesella`
-`/add /Volumes/disk/MyProject`
+`/fingerprints Tesella --root personal`
+`/scan /path/to/workspace work`
 EOF
 }
 
 cmd_list() {
-    OSORI_SCRIPT_DIR="$SCRIPT_DIR" OSORI_REG="$REGISTRY_FILE" python3 << 'PYSCRIPT'
+    local root_filter="${1:-}"
+
+    OSORI_ROOT_FILTER="$root_filter" OSORI_SCRIPT_DIR="$SCRIPT_DIR" OSORI_REG="$REGISTRY_FILE" python3 << 'PYSCRIPT'
 import os
 import sys
 
 sys.path.insert(0, os.environ["OSORI_SCRIPT_DIR"])
-from registry_lib import load_registry, registry_projects
+from registry_lib import filter_projects, load_registry, registry_projects, registry_roots
+
+root_filter = os.environ.get("OSORI_ROOT_FILTER", "").strip()
 
 res = load_registry(os.environ["OSORI_REG"], auto_migrate=True, make_backup_on_migrate=True)
-projects = registry_projects(res.registry)
+all_projects = registry_projects(res.registry)
+projects = filter_projects(all_projects, root_key=root_filter)
+roots = registry_roots(res.registry)
+root_keys = [r.get('key', 'default') for r in roots]
 
 if not projects:
-    print("📂 No projects registered yet.")
+    if root_filter:
+        print(f"📂 No projects in root '{root_filter}'.")
+        print(f"Available roots: {', '.join(root_keys)}")
+    else:
+        print("📂 No projects registered yet.")
     raise SystemExit(0)
 
 header = f"📋 *{len(projects)} Projects*"
 meta = f"(schema={res.registry.get('schema')} v{res.registry.get('version')})"
-print(f"{header} {meta}\n")
+root_meta = f" [root={root_filter}]" if root_filter else ""
+print(f"{header}{root_meta} {meta}\n")
 
 for p in projects[:20]:
     name = p.get('name', '-')
@@ -79,16 +93,20 @@ PYSCRIPT
 }
 
 cmd_status() {
-    OSORI_SCRIPT_DIR="$SCRIPT_DIR" OSORI_REG="$REGISTRY_FILE" python3 << 'PYSCRIPT'
+    local root_filter="${1:-}"
+
+    OSORI_ROOT_FILTER="$root_filter" OSORI_SCRIPT_DIR="$SCRIPT_DIR" OSORI_REG="$REGISTRY_FILE" python3 << 'PYSCRIPT'
 import os
 import subprocess
 import sys
 
 sys.path.insert(0, os.environ["OSORI_SCRIPT_DIR"])
-from registry_lib import load_registry, registry_projects
+from registry_lib import filter_projects, load_registry, registry_projects
+
+root_filter = os.environ.get("OSORI_ROOT_FILTER", "").strip()
 
 res = load_registry(os.environ["OSORI_REG"], auto_migrate=True, make_backup_on_migrate=True)
-projects = registry_projects(res.registry)
+projects = filter_projects(registry_projects(res.registry), root_key=root_filter)
 
 clean = modified = missing = 0
 
@@ -110,7 +128,8 @@ for p in projects:
     except Exception:
         missing += 1
 
-print("📊 *Project Status*\n")
+root_meta = f" [root={root_filter}]" if root_filter else ""
+print(f"📊 *Project Status*{root_meta}\n")
 print(f"✅ Clean: {clean}")
 print(f"📝 Modified: {modified}")
 print(f"⚠️ Missing: {missing}")
@@ -172,7 +191,8 @@ if shutil.which('mdfind'):
         raise SystemExit(0)
 
 # 3) find fallback
-search_paths = os.environ.get('OSORI_SEARCH_PATHS', '/Volumes/eyedisk/develop').split(':')
+paths_env = os.environ.get('OSORI_SEARCH_PATHS', '').strip()
+search_paths = [p for p in paths_env.split(':') if p] if paths_env else []
 for sp in search_paths:
     if not os.path.exists(sp):
         continue
@@ -186,6 +206,8 @@ for sp in search_paths:
             print(f"📍 {p}")
         raise SystemExit(0)
 
+if not search_paths:
+    print("ℹ️ Tip: set OSORI_SEARCH_PATHS for fallback discovery (e.g. /work:/personal)")
 print(f"❌ Project '{name}' not found.")
 PYSCRIPT
 }
@@ -248,7 +270,7 @@ print(f"📍 {path}")
 print(f"🧭 root: {target.get('root', 'default')}")
 
 # git status
-rc, status_out, _ = run(['git', '-C', path, 'status', '--short'])
+_, status_out, _ = run(['git', '-C', path, 'status', '--short'])
 if status_out:
     print("\n📝 Changes:")
     for line in status_out.split('\n')[:5]:
@@ -292,8 +314,7 @@ PYSCRIPT
 }
 
 cmd_fingerprints() {
-    local query="${1:-}"
-    bash "$SCRIPT_DIR/project-fingerprints.sh" "$query"
+    bash "$SCRIPT_DIR/project-fingerprints.sh" "$@"
 }
 
 cmd_add() {
@@ -337,23 +358,40 @@ PYSCRIPT
 }
 
 cmd_scan() {
-    local path="${1:-/Volumes/eyedisk/develop}"
+    local path="${1:-}"
+    local root_key="${2:-}"
+
+    local default_scan_root="${OSORI_SCAN_DEFAULT:-${OSORI_SEARCH_PATHS%%:*}}"
+    if [[ -z "$path" ]]; then
+      path="${default_scan_root:-.}"
+    fi
+
     [[ ! -d "$path" ]] && { echo "❌ Directory not found: $path"; exit 1; }
 
-    echo "🔍 *Scanning for git repositories...*"
-    bash "$SCRIPT_DIR/scan-projects.sh" "$path" --depth 2
+    if [[ -n "$root_key" ]]; then
+      echo "🔍 *Scanning for git repositories...* (root=$root_key)"
+      OSORI_ROOT_KEY="$root_key" bash "$SCRIPT_DIR/scan-projects.sh" "$path" --depth 2
+    else
+      echo "🔍 *Scanning for git repositories...*"
+      bash "$SCRIPT_DIR/scan-projects.sh" "$path" --depth 2
+    fi
 }
 
 # Main dispatch
-case "${1:-help}" in
-    list) cmd_list ;;
-    status) cmd_status ;;
-    find) cmd_find "${2:-}" ;;
-    switch) cmd_switch "${2:-}" ;;
-    fingerprints) cmd_fingerprints "${2:-}" ;;
-    add) cmd_add "${2:-}" ;;
-    remove) cmd_remove "${2:-}" ;;
-    scan) cmd_scan "${2:-}" ;;
+command="${1:-help}"
+if [[ $# -gt 0 ]]; then
+  shift
+fi
+
+case "$command" in
+    list) cmd_list "${1:-}" ;;
+    status) cmd_status "${1:-}" ;;
+    find) cmd_find "${1:-}" ;;
+    switch) cmd_switch "${1:-}" ;;
+    fingerprints) cmd_fingerprints "$@" ;;
+    add) cmd_add "${1:-}" ;;
+    remove) cmd_remove "${1:-}" ;;
+    scan) cmd_scan "${1:-}" "${2:-}" ;;
     help|--help|-h) show_help ;;
-    *) echo "❌ Unknown command: $1"; show_help; exit 1 ;;
+    *) echo "❌ Unknown command: $command"; show_help; exit 1 ;;
 esac

@@ -1,26 +1,50 @@
 #!/usr/bin/env bash
 # Show project fingerprints (repo/commit/PR/issue) from osori registry
-# Usage: project-fingerprints.sh [name]
+# Usage:
+#   project-fingerprints.sh [name-query]
+#   project-fingerprints.sh --root <root-key> [name-query]
 
 set -euo pipefail
 
-QUERY="${1:-}"
+QUERY=""
+ROOT_FILTER=""
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --root)
+      ROOT_FILTER="${2:-}"
+      shift 2
+      ;;
+    -h|--help)
+      echo "Usage: $0 [name-query] [--root <root-key>]"
+      exit 0
+      ;;
+    *)
+      if [[ -z "$QUERY" ]]; then
+        QUERY="$1"
+      fi
+      shift
+      ;;
+  esac
+done
+
 REGISTRY_FILE="${OSORI_REGISTRY:-$HOME/.openclaw/osori.json}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 OSORI_SCRIPT_DIR="$SCRIPT_DIR" \
 OSORI_REG="$REGISTRY_FILE" \
 OSORI_QUERY="$QUERY" \
+OSORI_ROOT_FILTER="$ROOT_FILTER" \
 python3 << 'PYEOF'
 import json
 import os
 import shutil
 import subprocess
 import sys
-from typing import Dict, List
+from typing import List
 
 sys.path.insert(0, os.environ["OSORI_SCRIPT_DIR"])
-from registry_lib import load_registry, parse_repo_from_remote, registry_projects
+from registry_lib import filter_projects, load_registry, parse_repo_from_remote, registry_projects
 
 
 def run(cmd: List[str], timeout: int = 8):
@@ -46,17 +70,21 @@ def gh_count(kind: str, repo: str):
         return "n/a"
 
 
-query = os.environ.get("OSORI_QUERY", "").strip().lower()
+query = os.environ.get("OSORI_QUERY", "").strip()
+root_filter = os.environ.get("OSORI_ROOT_FILTER", "").strip()
 reg_file = os.environ["OSORI_REG"]
 
 loaded = load_registry(reg_file, auto_migrate=True, make_backup_on_migrate=True)
-projects = registry_projects(loaded.registry)
-
-if query:
-    projects = [p for p in projects if query in p.get("name", "").lower()]
+projects = filter_projects(registry_projects(loaded.registry), root_key=root_filter, name_query=query)
 
 if not projects:
-    print("📂 No matching projects.")
+    where = []
+    if root_filter:
+        where.append(f"root={root_filter}")
+    if query:
+        where.append(f"query={query}")
+    suffix = f" ({', '.join(where)})" if where else ""
+    print(f"📂 No matching projects{suffix}.")
     raise SystemExit(0)
 
 if loaded.migrated:
@@ -66,7 +94,10 @@ if loaded.migrated:
         print(f"ℹ️ Migration backup: {loaded.backup_path}")
     print()
 
-print(f"🧬 Project fingerprints ({len(projects)})\n")
+headline = f"🧬 Project fingerprints ({len(projects)})"
+if root_filter:
+    headline += f" [root={root_filter}]"
+print(f"{headline}\n")
 
 for p in projects:
     name = p.get("name", "-")

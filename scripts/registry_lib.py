@@ -163,8 +163,10 @@ def _migrate_object(payload: Dict[str, Any]) -> Tuple[Dict[str, Any], List[str]]
     reg["roots"] = _normalize_roots(reg.get("roots"))
     root_keys = {r["key"] for r in reg["roots"]}
     for p in reg["projects"]:
-        if p["root"] not in root_keys:
-            p["root"] = "default"
+        proj_root = p.get("root", "default") or "default"
+        if proj_root not in root_keys:
+            reg["roots"].append({"key": proj_root, "label": proj_root.title(), "paths": []})
+            root_keys.add(proj_root)
 
     if version < REGISTRY_VERSION:
         notes.append(f"version migration v{version} -> v{REGISTRY_VERSION}")
@@ -278,6 +280,45 @@ def registry_projects(registry: Dict[str, Any]) -> List[Dict[str, Any]]:
     if not isinstance(projects, list):
         return []
     return projects
+
+
+def registry_roots(registry: Dict[str, Any]) -> List[Dict[str, Any]]:
+    return _normalize_roots(registry.get("roots", []))
+
+
+def normalize_root_key(root_key: str | None) -> str | None:
+    if root_key is None:
+        return None
+    key = str(root_key).strip()
+    if not key:
+        return None
+    if key in {"all", "*"}:
+        return None
+    return key
+
+
+def filter_projects(projects: List[Dict[str, Any]], root_key: str | None = None, name_query: str | None = None) -> List[Dict[str, Any]]:
+    selected = projects
+
+    rk = normalize_root_key(root_key)
+    if rk:
+        selected = [p for p in selected if str(p.get("root", "default")) == rk]
+
+    q = (name_query or "").strip().lower()
+    if q:
+        selected = [p for p in selected if q in str(p.get("name", "")).lower()]
+
+    return selected
+
+
+def ensure_root_exists(registry: Dict[str, Any], root_key: str | None) -> str:
+    key = normalize_root_key(root_key) or "default"
+    roots = registry_roots(registry)
+    existing = {r.get("key") for r in roots}
+    if key not in existing:
+        roots.append({"key": key, "label": key.title(), "paths": []})
+    registry["roots"] = roots
+    return key
 
 
 def set_registry_projects(registry: Dict[str, Any], projects: List[Dict[str, Any]]) -> None:

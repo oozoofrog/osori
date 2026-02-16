@@ -192,6 +192,73 @@ assert_contains "project root is set from env" "$content" '"root": "work"'
 teardown_test
 
 echo ""
+echo "=== test_fingerprints_root_filter ==="
+setup_test
+# work project
+export OSORI_ROOT_KEY="work"
+git -C "$TEST_TMP/fake-project" remote add origin "https://github.com/example/work-proj.git"
+bash "$PROJECT_ROOT/scripts/add-project.sh" "$TEST_TMP/fake-project" --name "work-proj" >/dev/null 2>&1
+
+# personal project
+mkdir -p "$TEST_TMP/personal-project"
+git -C "$TEST_TMP/personal-project" init -q 2>/dev/null
+git -C "$TEST_TMP/personal-project" config user.email "test@example.com"
+git -C "$TEST_TMP/personal-project" config user.name "osori-test"
+echo "personal" > "$TEST_TMP/personal-project/README.md"
+git -C "$TEST_TMP/personal-project" add README.md >/dev/null 2>&1
+git -C "$TEST_TMP/personal-project" commit -m "init" >/dev/null 2>&1 || true
+export OSORI_ROOT_KEY="personal"
+bash "$PROJECT_ROOT/scripts/add-project.sh" "$TEST_TMP/personal-project" --name "personal-proj" >/dev/null 2>&1
+
+output=$(bash "$PROJECT_ROOT/scripts/project-fingerprints.sh" --root work 2>&1)
+assert_contains "root filter headline" "$output" "[root=work]"
+assert_contains "work project visible" "$output" "work-proj"
+assert_not_contains "personal project hidden" "$output" "personal-proj"
+teardown_test
+
+echo ""
+echo "=== test_telegram_root_filters ==="
+setup_test
+export OSORI_ROOT_KEY="work"
+bash "$PROJECT_ROOT/scripts/add-project.sh" "$TEST_TMP/fake-project" --name "tg-work" >/dev/null 2>&1
+mkdir -p "$TEST_TMP/tg-personal"
+git -C "$TEST_TMP/tg-personal" init -q 2>/dev/null
+git -C "$TEST_TMP/tg-personal" config user.email "test@example.com"
+git -C "$TEST_TMP/tg-personal" config user.name "osori-test"
+echo "x" > "$TEST_TMP/tg-personal/README.md"
+git -C "$TEST_TMP/tg-personal" add README.md >/dev/null 2>&1
+git -C "$TEST_TMP/tg-personal" commit -m "init" >/dev/null 2>&1 || true
+export OSORI_ROOT_KEY="personal"
+bash "$PROJECT_ROOT/scripts/add-project.sh" "$TEST_TMP/tg-personal" --name "tg-personal" >/dev/null 2>&1
+
+list_out=$(bash "$PROJECT_ROOT/scripts/telegram-commands.sh" list work 2>&1)
+assert_contains "telegram list root header" "$list_out" "[root=work]"
+assert_contains "telegram list shows work" "$list_out" "tg-work"
+assert_not_contains "telegram list hides personal" "$list_out" "tg-personal"
+
+status_out=$(bash "$PROJECT_ROOT/scripts/telegram-commands.sh" status work 2>&1)
+assert_contains "telegram status root header" "$status_out" "[root=work]"
+assert_contains "telegram status total one" "$status_out" "Total: 1"
+teardown_test
+
+echo ""
+echo "=== test_telegram_scan_root_arg ==="
+setup_test
+mkdir -p "$TEST_TMP/scan-repos/proj1"
+git -C "$TEST_TMP/scan-repos/proj1" init -q 2>/dev/null
+git -C "$TEST_TMP/scan-repos/proj1" config user.email "test@example.com"
+git -C "$TEST_TMP/scan-repos/proj1" config user.name "osori-test"
+echo "scan" > "$TEST_TMP/scan-repos/proj1/README.md"
+git -C "$TEST_TMP/scan-repos/proj1" add README.md >/dev/null 2>&1
+git -C "$TEST_TMP/scan-repos/proj1" commit -m "init" >/dev/null 2>&1 || true
+
+scan_out=$(bash "$PROJECT_ROOT/scripts/telegram-commands.sh" scan "$TEST_TMP/scan-repos" work 2>&1)
+assert_contains "telegram scan prints root" "$scan_out" "root=work"
+content=$(cat "$TEST_TMP/osori.json")
+assert_contains "scanned project has root key" "$content" '"root": "work"'
+teardown_test
+
+echo ""
 echo "=== test_injection_safe ==="
 setup_test
 mkdir -p "$TEST_TMP/evil-project"
