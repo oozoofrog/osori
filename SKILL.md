@@ -25,7 +25,7 @@ Osori now supports Telegram slash commands for quick project management:
 /list [root] — Show registered projects (optional root filter)
 /status [root] — Check status of projects (optional root filter)
 /find <name> [root|--root <root>] — Find a project by name (optional root scope)
-/switch <name> [root|--root <root>] — Switch to project and load context (optional root scope)
+/switch <name> [root|--root <root>] [--index <n>] — Switch to project and load context (multi-match selection)
 /fingerprints [name] [--root <root>] — Show repo remote + last commit + open PR/issue counts
 /doctor [--fix] [--json] — Registry health check and safe auto-fix
 /list-roots — List roots, labels, paths, and project counts
@@ -71,6 +71,7 @@ help - Show help
 /status personal
 /find agent-avengers work
 /switch Tesella --root personal
+/switch Tesella --root personal --index 1
 /fingerprints Tesella --root personal
 /doctor --fix
 /list-roots
@@ -124,21 +125,34 @@ Show all registered projects. Optional root filter supported in Telegram command
 (Example: `/list work`)
 
 ### Switch
-Supports optional root scope:
+Supports optional root scope and explicit candidate selection:
 
 ```bash
-/switch <name> [root|--root <root>]
+/switch <name> [root|--root <root>] [--index <n>]
 ```
 
 Flow:
-1. Search registry (fuzzy match, root-prioritized if provided)
-2. If not found → run "Finding Projects" flow above and suggest add path
-3. Load context:
+1. Search registry (fuzzy match, root-scoped if provided)
+2. If multiple matches:
+   - show candidate list (name/root/path/last commit/dirty/score)
+   - `--index <n>` to pick explicitly
+   - no index => auto-pick highest score
+3. If not found → run "Finding Projects" flow above and suggest add path
+4. Load context:
    - `git status --short`
    - `git branch --show-current`
    - `git log --oneline -5`
    - `gh issue list -R <repo> --limit 5` (when repo is set)
-4. Present summary
+5. Present summary
+
+Auto score policy:
+- +50 root exact (if root scope provided)
+- +30 name exact
+- +20 name prefix
+- +10 latest commit recency
+- -10 missing path
+- -5 repo missing
+- tie-break: latest commit, then name
 
 ### Fingerprints
 Show a one-shot project fingerprint view:

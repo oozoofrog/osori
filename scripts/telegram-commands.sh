@@ -23,7 +23,7 @@ show_help() {
 /list [root] — Show all projects (optionally filter by root)
 /status [root] — Check project statuses (optionally filter by root)
 /find <name> [root|--root <root>] — Find a project path (optional root scope)
-/switch <name> [root|--root <root>] — Switch to project & load context (optional root scope)
+/switch <name> [root|--root <root>] [--index <n>] — Switch to project & load context (multi-match selection)
 /fingerprints [name] [--root <root>] — Show repo/commit/PR/issue fingerprints
 /doctor [--fix] [--json] — Registry health check and safe auto-fix
 /list-roots — List roots, labels, paths, project counts
@@ -42,6 +42,7 @@ show_help() {
 `/status personal`
 `/find agent-avengers work`
 `/switch Tesella --root personal`
+`/switch Tesella --root personal --index 1`
 `/fingerprints Tesella --root personal`
 `/doctor --fix`
 `/list-roots`
@@ -286,11 +287,16 @@ PYSCRIPT
 cmd_switch() {
     local name=""
     local root_filter=""
+    local index_arg=""
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --root)
                 root_filter="${2:-}"
+                shift 2
+                ;;
+            --index)
+                index_arg="${2:-}"
                 shift 2
                 ;;
             *)
@@ -304,9 +310,9 @@ cmd_switch() {
         esac
     done
 
-    [[ -z "$name" ]] && { echo "❌ Usage: /switch <project-name> [root|--root <root>]"; exit 1; }
+    [[ -z "$name" ]] && { echo "❌ Usage: /switch <project-name> [root|--root <root>] [--index <n>]"; exit 1; }
 
-    OSORI_NAME="$name" OSORI_ROOT_FILTER="$root_filter" OSORI_SCRIPT_DIR="$SCRIPT_DIR" OSORI_REG="$REGISTRY_FILE" python3 << 'PYSCRIPT'
+    OSORI_NAME="$name" OSORI_ROOT_FILTER="$root_filter" OSORI_SWITCH_INDEX="$index_arg" OSORI_SCRIPT_DIR="$SCRIPT_DIR" OSORI_REG="$REGISTRY_FILE" python3 << 'PYSCRIPT'
 import json
 import os
 import shutil
@@ -345,22 +351,66 @@ def gh_count(kind, repo):
         return "n/a"
 
 
+def git_last_commit(path):
+    rc_iso, iso, _ = run(["git", "-C", path, "log", "-1", "--format=%cI"])
+    rc_ts, ts, _ = run(["git", "-C", path, "log", "-1", "--format=%ct"])
+    if rc_iso != 0 or not iso:
+        iso = "n/a"
+    if rc_ts != 0 or not ts:
+        return iso, 0
+    try:
+        return iso, int(ts)
+    except Exception:
+        return iso, 0
+
+
+def git_dirty(path):
+    rc, out, _ = run(["git", "-C", path, "status", "--short"])
+    if rc != 0:
+        return "n/a"
+    return "dirty" if bool(out.strip()) else "clean"
+
+
 name_raw = os.environ["OSORI_NAME"].strip()
 name = name_raw.lower()
 root_filter = os.environ.get("OSORI_ROOT_FILTER", "").strip()
+index_arg = os.environ.get("OSORI_SWITCH_INDEX", "").strip()
 root_key = normalize_root_key(root_filter)
 
 res = load_registry(os.environ["OSORI_REG"], auto_migrate=True, make_backup_on_migrate=True)
 projects = filter_projects(registry_projects(res.registry), root_key=root_filter)
 roots = [r.get("key", "default") for r in registry_roots(res.registry)]
 
-target = None
+candidates = []
 for p in projects:
-    if name in p.get('name', '').lower():
-        target = p
-        break
+    pname = str(p.get("name", ""))
+    if name not in pname.lower():
+        continue
 
-if not target:
+    ppath = str(p.get("path", ""))
+    exists = bool(ppath) and os.path.exists(ppath)
+    commit_iso = "n/a"
+    commit_ts = 0
+    dirty = "n/a"
+
+    if exists:
+        commit_iso, commit_ts = git_last_commit(ppath)
+        dirty = git_dirty(ppath)
+
+    candidates.append({
+        "project": p,
+        "name": pname,
+        "root": str(p.get("root", "default") or "default"),
+        "path": ppath,
+        "exists": exists,
+        "repo": str(p.get("repo", "") or ""),
+        "commit_iso": commit_iso,
+        "commit_ts": commit_ts,
+        "dirty": dirty,
+        "score": 0,
+    })
+
+if not candidates:
     if root_key:
         print(f"❌ Project '{name_raw}' not found in root '{root_key}' registry.")
     else:
@@ -395,7 +445,60 @@ if not target:
 
     raise SystemExit(1)
 
-path = target.get('path', '')
+# Score policy (roadmap fixed)
+max_commit_ts = max((c["commit_ts"] for c in candidates), default=0)
+for c in candidates:
+    score = 0
+    nlow = c["name"].lower()
+
+    if root_key and c["root"] == root_key:
+        score += 50
+    if nlow == name:
+        score += 30
+    if nlow.startswith(name):
+        score += 20
+    if max_commit_ts > 0 and c["commit_ts"] == max_commit_ts:
+        score += 10
+    if not c["exists"]:
+        score -= 10
+    if not c["repo"]:
+        score -= 5
+
+    c["score"] = score
+
+candidates.sort(key=lambda c: (-c["score"], -c["commit_ts"], c["name"].lower()))
+
+if len(candidates) > 1:
+    print(f"🔎 Multiple matches ({len(candidates)}):")
+    for idx, c in enumerate(candidates, 1):
+        print(
+            f"  {idx}. {c['name']} [{c['root']}] | score={c['score']} | "
+            f"dirty={c['dirty']} | last={c['commit_iso']}"
+        )
+    print()
+
+selected = None
+if index_arg:
+    try:
+        index_val = int(index_arg)
+    except Exception:
+        print(f"❌ invalid --index value: {index_arg!r}")
+        raise SystemExit(1)
+
+    if index_val < 1 or index_val > len(candidates):
+        print(f"❌ --index out of range: {index_val} (1..{len(candidates)})")
+        raise SystemExit(1)
+
+    selected = candidates[index_val - 1]
+    if len(candidates) > 1:
+        print(f"✅ Selected candidate #{index_val} explicitly.\n")
+else:
+    selected = candidates[0]
+    if len(candidates) > 1:
+        print("🤖 Auto-selected #1 by score policy. Use --index <n> to choose explicitly.\n")
+
+target = selected["project"]
+path = selected["path"]
 if not path or not os.path.exists(path):
     print(f"⚠️ Path does not exist: {path}")
     raise SystemExit(1)
