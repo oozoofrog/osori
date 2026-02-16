@@ -45,7 +45,7 @@ from typing import List
 
 sys.path.insert(0, os.environ["OSORI_SCRIPT_DIR"])
 from github_cache import DEFAULT_CACHE_PATH, get_open_count
-from registry_lib import filter_projects, load_registry, parse_repo_from_remote, registry_projects
+from registry_lib import filter_projects, load_registry, parse_repo_from_remote, registry_projects, resolve_alias
 
 
 def run(cmd: List[str], timeout: int = 8):
@@ -92,7 +92,8 @@ root_filter = os.environ.get("OSORI_ROOT_FILTER", "").strip()
 reg_file = os.environ["OSORI_REG"]
 
 loaded = load_registry(reg_file, auto_migrate=True, make_backup_on_migrate=True)
-projects = filter_projects(registry_projects(loaded.registry), root_key=root_filter, name_query=query)
+resolved_query = resolve_alias(query, loaded.registry) if query else query
+projects = filter_projects(registry_projects(loaded.registry), root_key=root_filter, name_query=resolved_query)
 
 if not projects:
     where = []
@@ -103,6 +104,10 @@ if not projects:
     suffix = f" ({', '.join(where)})" if where else ""
     print(f"📂 No matching projects{suffix}.")
     raise SystemExit(0)
+
+if query and resolved_query != query:
+    print(f"ℹ️ alias resolved: {query} -> {resolved_query}")
+    print()
 
 if loaded.migrated:
     notes = "; ".join(loaded.migration_notes)

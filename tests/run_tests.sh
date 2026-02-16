@@ -563,6 +563,49 @@ assert_contains "switch index out-of-range" "$bad_index_out" "--index out of ran
 teardown_test
 
 echo ""
+echo "=== test_alias_commands_and_resolution ==="
+setup_test
+
+# register project
+bash "$PROJECT_ROOT/scripts/add-project.sh" "$TEST_TMP/fake-project" --name "RunnersHeart" >/dev/null 2>&1
+
+alias_add_out=$(bash "$PROJECT_ROOT/scripts/telegram-commands.sh" alias-add rh RunnersHeart 2>&1)
+assert_contains "alias-add works" "$alias_add_out" "alias added: rh -> RunnersHeart"
+
+aliases_out=$(bash "$PROJECT_ROOT/scripts/alias-favorite-manager.sh" aliases 2>&1)
+assert_contains "aliases list includes key" "$aliases_out" "rh -> RunnersHeart"
+
+find_alias_out=$(bash "$PROJECT_ROOT/scripts/telegram-commands.sh" find rh 2>&1)
+assert_contains "find resolves alias" "$find_alias_out" "alias resolved: rh -> RunnersHeart"
+assert_contains "find alias returns project" "$find_alias_out" "RunnersHeart"
+
+fp_alias_out=$(bash "$PROJECT_ROOT/scripts/project-fingerprints.sh" rh 2>&1)
+assert_contains "fingerprints resolves alias" "$fp_alias_out" "alias resolved: rh -> RunnersHeart"
+
+alias_remove_out=$(bash "$PROJECT_ROOT/scripts/telegram-commands.sh" alias-remove rh 2>&1)
+assert_contains "alias-remove works" "$alias_remove_out" "alias removed: rh"
+teardown_test
+
+echo ""
+echo "=== test_favorite_commands ==="
+setup_test
+
+bash "$PROJECT_ROOT/scripts/add-project.sh" "$TEST_TMP/fake-project" --name "FavProj" >/dev/null 2>&1
+
+fav_add_out=$(bash "$PROJECT_ROOT/scripts/telegram-commands.sh" favorite-add FavProj 2>&1)
+assert_contains "favorite-add works" "$fav_add_out" "favorite added: FavProj"
+
+favs_out=$(bash "$PROJECT_ROOT/scripts/telegram-commands.sh" favorites 2>&1)
+assert_contains "favorites list shows project" "$favs_out" "FavProj"
+
+fav_remove_out=$(bash "$PROJECT_ROOT/scripts/telegram-commands.sh" favorite-remove FavProj 2>&1)
+assert_contains "favorite-remove works" "$fav_remove_out" "favorite removed: FavProj"
+
+favs_out2=$(bash "$PROJECT_ROOT/scripts/telegram-commands.sh" favorites 2>&1)
+assert_contains "favorites empty message" "$favs_out2" "No favorite projects"
+teardown_test
+
+echo ""
 echo "=== test_switch_root_filter ==="
 setup_test
 export OSORI_ROOT_KEY="work"

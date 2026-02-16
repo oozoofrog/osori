@@ -51,6 +51,7 @@ def _empty_registry() -> Dict[str, Any]:
         "updatedAt": _utc_now_iso(),
         "roots": _default_roots(),
         "projects": [],
+        "aliases": {},
     }
 
 
@@ -89,6 +90,7 @@ def normalize_project(item: Any) -> Dict[str, Any] | None:
         "description": str(item.get("description", "") or ""),
         "addedAt": str(item.get("addedAt") or _local_today()),
         "root": str(item.get("root", "default") or "default"),
+        "favorite": bool(item.get("favorite", False)),
     }
     return proj
 
@@ -168,6 +170,9 @@ def _migrate_object(payload: Dict[str, Any]) -> Tuple[Dict[str, Any], List[str]]
             reg["roots"].append({"key": proj_root, "label": proj_root.title(), "paths": []})
             root_keys.add(proj_root)
 
+    # normalize aliases
+    reg["aliases"] = registry_aliases(reg)
+
     if version < REGISTRY_VERSION:
         notes.append(f"version migration v{version} -> v{REGISTRY_VERSION}")
         reg["version"] = REGISTRY_VERSION
@@ -199,6 +204,7 @@ def save_registry(path: str, registry: Dict[str, Any], make_backup: bool = True)
     reg_copy.setdefault("version", REGISTRY_VERSION)
     reg_copy.setdefault("roots", _default_roots())
     reg_copy.setdefault("projects", [])
+    reg_copy.setdefault("aliases", {})
     reg_copy["updatedAt"] = _utc_now_iso()
 
     backup_path: str | None = None
@@ -295,6 +301,51 @@ def normalize_root_key(root_key: str | None) -> str | None:
     if key in {"all", "*"}:
         return None
     return key
+
+
+def _normalize_alias_key(alias: str | None) -> str:
+    if alias is None:
+        return ""
+    return str(alias).strip().lower()
+
+
+def registry_aliases(registry: Dict[str, Any]) -> Dict[str, str]:
+    raw = registry.get("aliases", {})
+    if not isinstance(raw, dict):
+        return {}
+
+    out: Dict[str, str] = {}
+    for k, v in raw.items():
+        key = _normalize_alias_key(str(k))
+        if not key:
+            continue
+        if not isinstance(v, str):
+            continue
+        target = v.strip()
+        if not target:
+            continue
+        out[key] = target
+    return out
+
+
+def set_registry_aliases(registry: Dict[str, Any], aliases: Dict[str, str]) -> None:
+    normalized = {}
+    for k, v in aliases.items():
+        key = _normalize_alias_key(k)
+        target = str(v).strip()
+        if not key or not target:
+            continue
+        normalized[key] = target
+    registry["aliases"] = normalized
+    registry["updatedAt"] = _utc_now_iso()
+
+
+def resolve_alias(name_or_alias: str, registry: Dict[str, Any]) -> str:
+    aliases = registry_aliases(registry)
+    key = _normalize_alias_key(name_or_alias)
+    if key in aliases:
+        return aliases[key]
+    return name_or_alias
 
 
 def parse_env_search_paths(paths_env: str | None) -> List[str]:

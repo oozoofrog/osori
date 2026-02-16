@@ -1,6 +1,6 @@
 ---
 name: osori
-description: "Osori v1.5.0-rc1 — Local project registry & context loader with Telegram slash commands. Registry versioning + auto-migration + fingerprints view + root filters + root management + doctor health checks + safe root remove + GitHub count cache. Find, switch, list, add/remove projects, check status. Triggers: work on X, find project X, list projects, project status, project switch. | 오소리 — 텔레그램 슬래시 명령어 지원 로컬 프로젝트 레지스트리."
+description: "Osori v1.5.0 — Local project registry & context loader with Telegram slash commands. Registry versioning + auto-migration + root filters + root management + doctor + safe root remove + switch multi-match + GitHub count cache + alias/favorite commands. Find, switch, list, add/remove projects, check status. Triggers: work on X, find project X, list projects, project status, project switch. | 오소리 — 텔레그램 슬래시 명령어 지원 로컬 프로젝트 레지스트리."
 ---
 
 # Osori (오소리)
@@ -17,7 +17,7 @@ Local project registry & context loader for AI agents.
 - **python3** — Required. Used for JSON processing.
 - **git** — Project detection and status checks.
 
-## Telegram Bot Commands (Updated in v1.5.0-rc1)
+## Telegram Bot Commands (Updated in v1.5.0)
 
 Osori now supports Telegram slash commands for quick project management:
 
@@ -34,6 +34,11 @@ Osori now supports Telegram slash commands for quick project management:
 /root-path-remove <key> <path> — Remove discovery path from root
 /root-set-label <key> <label> — Update root label
 /root-remove <key> [--reassign <target>] [--force] — Safely remove root
+/alias-add <alias> <project> — Add alias for project
+/alias-remove <alias> — Remove alias
+/favorites — Show favorite projects
+/favorite-add <project> — Mark project as favorite
+/favorite-remove <project> — Unmark favorite
 /add <path> — Add project to registry
 /remove <name> — Remove project from registry
 /scan <path> [root] — Scan directory for git projects, optional root key
@@ -58,6 +63,11 @@ root-path-add - Add path to root
 root-path-remove - Remove path from root
 root-set-label - Rename root label
 root-remove - Safely remove root (with reassign/force options)
+alias-add - Add alias for a project
+alias-remove - Remove alias
+favorites - Show favorite projects
+favorite-add - Mark favorite project
+favorite-remove - Unmark favorite project
 add - Add project to registry
 remove - Remove project
 scan - Scan directory (optional root)
@@ -78,6 +88,9 @@ help - Show help
 /root-add work Work
 /root-path-add work /path/to/workspace
 /root-remove work --reassign default
+/alias-add rh RunnersHeart
+/favorite-add RunnersHeart
+/favorites
 /add /Volumes/disk/MyProject
 /scan /path/to/workspace work
 ```
@@ -88,13 +101,17 @@ help - Show help
 
 Override with the `OSORI_REGISTRY` environment variable.
 
-### Versioning & Migration (v1.4.1)
+### Versioning & Migration (v1.5.0)
 
 - Current schema: `osori.registry`
 - Current version: `2`
 - On every load, Osori auto-migrates older registry formats:
   - legacy array (`[]`) → versioned object
   - object without `schema/version` → normalized versioned object
+- Normalized registry fields:
+  - top-level `roots[]`
+  - top-level `aliases{}` (alias → project name)
+  - each `projects[]` item includes `favorite: bool`
 - Migration safety:
   - creates backup: `osori.json.bak-<timestamp>`
   - corrupted JSON is preserved as: `osori.json.broken-<timestamp>`
@@ -247,6 +264,29 @@ Safety rules for remove:
   - `--reassign <target>` to move projects then remove
   - or `--force` to move projects to `default` and remove
 
+### Alias & Favorites
+
+```bash
+/alias-add <alias> <project>
+/alias-remove <alias>
+/favorites
+/favorite-add <project>
+/favorite-remove <project>
+```
+
+Shell equivalents:
+
+```bash
+bash skills/osori/scripts/alias-favorite-manager.sh alias-add <alias> <project>
+bash skills/osori/scripts/alias-favorite-manager.sh alias-remove <alias>
+bash skills/osori/scripts/alias-favorite-manager.sh aliases
+bash skills/osori/scripts/alias-favorite-manager.sh favorite-add <project>
+bash skills/osori/scripts/alias-favorite-manager.sh favorite-remove <project>
+bash skills/osori/scripts/alias-favorite-manager.sh favorites
+```
+
+Aliases are case-insensitive and are resolved by `/find`, `/switch`, and `project-fingerprints.sh` name queries.
+
 ## Schema
 
 ```json
@@ -261,6 +301,9 @@ Safety rules for remove:
       "paths": []
     }
   ],
+  "aliases": {
+    "rh": "RunnersHeart"
+  },
   "projects": [
     {
       "name": "string",
@@ -270,7 +313,8 @@ Safety rules for remove:
       "tags": ["personal", "ios"],
       "description": "Short description",
       "addedAt": "YYYY-MM-DD",
-      "root": "default"
+      "root": "default",
+      "favorite": false
     }
   ]
 }
