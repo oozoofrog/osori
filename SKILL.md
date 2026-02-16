@@ -1,6 +1,6 @@
 ---
 name: osori
-description: "Osori v1.5.0 — Local project registry & context loader with Telegram slash commands. Registry versioning + auto-migration + root filters + root management + doctor + safe root remove + switch multi-match + GitHub count cache + alias/favorite commands. Find, switch, list, add/remove projects, check status. Triggers: work on X, find project X, list projects, project status, project switch. | 오소리 — 텔레그램 슬래시 명령어 지원 로컬 프로젝트 레지스트리."
+description: "Osori v1.5.0 — Local project registry & context loader with Telegram slash commands. Registry versioning + auto-migration + root filters + root management + doctor + safe root remove + switch multi-match + GitHub count cache + alias/favorite + Entire integration commands. Find, switch, list, add/remove projects, check status. Triggers: work on X, find project X, list projects, project status, project switch. | 오소리 — 텔레그램 슬래시 명령어 지원 로컬 프로젝트 레지스트리."
 ---
 
 # Osori (오소리)
@@ -11,11 +11,13 @@ Local project registry & context loader for AI agents.
 
 - **macOS**: `mdfind` (Spotlight, built-in), `python3`, `git`, `gh` CLI
 - **Linux**: `mdfind` unavailable → uses `find` as fallback automatically. `python3`, `git`, `gh` CLI required.
+- **Entire integration (optional)**: `entire` CLI installed (for `/entire-*` commands)
 
 ## Dependencies
 
 - **python3** — Required. Used for JSON processing.
 - **git** — Project detection and status checks.
+- **entire** — Optional. Required only for `/entire-status`, `/entire-enable`, `/entire-rewind-list`.
 
 ## Telegram Bot Commands (Updated in v1.5.0)
 
@@ -39,6 +41,9 @@ Osori now supports Telegram slash commands for quick project management:
 /favorites — Show favorite projects
 /favorite-add <project> — Mark project as favorite
 /favorite-remove <project> — Unmark favorite
+/entire-status <project> [root|--root <root>] — Show Entire status in a project
+/entire-enable <project> [root|--root <root>] [--agent <name>] [--strategy <name>] — Enable Entire in a project
+/entire-rewind-list <project> [root|--root <root>] — List rewind points in a project
 /add <path> — Add project to registry
 /remove <name> — Remove project from registry
 /scan <path> [root] — Scan directory for git projects, optional root key
@@ -68,6 +73,9 @@ alias-remove - Remove alias
 favorites - Show favorite projects
 favorite-add - Mark favorite project
 favorite-remove - Unmark favorite project
+entire-status - Show Entire status for a project
+entire-enable - Enable Entire for a project
+entire-rewind-list - List rewind points for a project
 add - Add project to registry
 remove - Remove project
 scan - Scan directory (optional root)
@@ -91,6 +99,8 @@ help - Show help
 /alias-add rh RunnersHeart
 /favorite-add RunnersHeart
 /favorites
+/entire-status osori
+/entire-enable osori --agent claude-code --strategy manual-commit
 /add /Volumes/disk/MyProject
 /scan /path/to/workspace work
 ```
@@ -286,6 +296,28 @@ bash skills/osori/scripts/alias-favorite-manager.sh favorites
 ```
 
 Aliases are case-insensitive and are resolved by `/find`, `/switch`, and `project-fingerprints.sh` name queries.
+
+### Entire Integration
+
+Run Entire CLI commands in a registered project context:
+
+```bash
+/entire-status <project> [root|--root <root>]
+/entire-enable <project> [root|--root <root>] [--agent <name>] [--strategy <name>]
+/entire-rewind-list <project> [root|--root <root>]
+```
+
+Shell equivalent:
+
+```bash
+bash skills/osori/scripts/entire-manager.sh status <project> [root|--root <root>]
+bash skills/osori/scripts/entire-manager.sh enable <project> [root|--root <root>] [entire enable flags...]
+bash skills/osori/scripts/entire-manager.sh rewind-list <project> [root|--root <root>]
+```
+
+Defaults:
+- `entire enable` defaults to `--agent claude-code --strategy manual-commit` when not provided.
+- `/entire-rewind-list` uses non-destructive JSON listing (`entire rewind --list`).
 
 ## Schema
 
