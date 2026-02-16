@@ -1,6 +1,6 @@
 ---
 name: osori
-description: "Osori v1.5.0 — Local project registry & context loader with Telegram slash commands. Registry versioning + auto-migration + root filters + root management + doctor + safe root remove + switch multi-match + GitHub count cache + alias/favorite + Entire integration commands. Find, switch, list, add/remove projects, check status. Triggers: work on X, find project X, list projects, project status, project switch. | 오소리 — 텔레그램 슬래시 명령어 지원 로컬 프로젝트 레지스트리."
+description: "Osori v1.6.0 — Local project registry & context loader with Telegram slash commands. Registry versioning + auto-migration + root filters + root management + doctor (preview-first + risk gate) + safe root remove + switch multi-match + GitHub count cache + alias/favorite + Entire integration commands. Find, switch, list, add/remove projects, check status. Triggers: work on X, find project X, list projects, project status, project switch. | 오소리 — 텔레그램 슬래시 명령어 지원 로컬 프로젝트 레지스트리."
 ---
 
 # Osori (오소리)
@@ -19,7 +19,7 @@ Local project registry & context loader for AI agents.
 - **git** — Project detection and status checks.
 - **entire** — Optional. Required only for `/entire-status`, `/entire-enable`, `/entire-rewind-list`.
 
-## Telegram Bot Commands (Updated in v1.5.0)
+## Telegram Bot Commands (Updated in v1.6.0)
 
 Osori now supports Telegram slash commands for quick project management:
 
@@ -111,7 +111,7 @@ help - Show help
 
 Override with the `OSORI_REGISTRY` environment variable.
 
-### Versioning & Migration (v1.5.0)
+### Versioning & Migration (v1.6.0)
 
 - Current schema: `osori.registry`
 - Current version: `2`
