@@ -7,14 +7,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REGISTRY_FILE="${OSORI_REGISTRY:-$HOME/.openclaw/osori.json}"
 
-# Ensure registry exists + auto-migrate if needed
-OSORI_SCRIPT_DIR="$SCRIPT_DIR" OSORI_REG="$REGISTRY_FILE" python3 << 'PYEOF' >/dev/null
-import os
-import sys
-sys.path.insert(0, os.environ["OSORI_SCRIPT_DIR"])
-from registry_lib import load_registry
-load_registry(os.environ["OSORI_REG"], auto_migrate=True, make_backup_on_migrate=True)
-PYEOF
+# Note: each cmd_* handler calls load_registry() internally.
+# No upfront load needed — avoids duplicate I/O and backup creation.
 
 show_help() {
     cat << 'EOF'
