@@ -297,6 +297,41 @@ def normalize_root_key(root_key: str | None) -> str | None:
     return key
 
 
+def parse_env_search_paths(paths_env: str | None) -> List[str]:
+    if not paths_env:
+        return []
+    return [p.strip() for p in str(paths_env).split(":") if p.strip()]
+
+
+def search_paths_for_discovery(registry: Dict[str, Any], root_key: str | None = None, env_paths: str | None = None) -> List[str]:
+    rk = normalize_root_key(root_key)
+    roots = registry_roots(registry)
+
+    ordered: List[str] = []
+
+    if rk:
+        for r in roots:
+            if r.get("key") == rk:
+                ordered.extend([p for p in r.get("paths", []) if isinstance(p, str) and p.strip()])
+                break
+    else:
+        for r in roots:
+            ordered.extend([p for p in r.get("paths", []) if isinstance(p, str) and p.strip()])
+
+    ordered.extend(parse_env_search_paths(env_paths))
+
+    # stable de-dup
+    deduped: List[str] = []
+    seen = set()
+    for p in ordered:
+        if p in seen:
+            continue
+        seen.add(p)
+        deduped.append(p)
+
+    return deduped
+
+
 def filter_projects(projects: List[Dict[str, Any]], root_key: str | None = None, name_query: str | None = None) -> List[Dict[str, Any]]:
     selected = projects
 

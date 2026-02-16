@@ -24,8 +24,8 @@ Osori now supports Telegram slash commands for quick project management:
 ```
 /list [root] — Show registered projects (optional root filter)
 /status [root] — Check status of projects (optional root filter)
-/find <name> — Find a project by name
-/switch <name> — Switch to project and load context
+/find <name> [root|--root <root>] — Find a project by name (optional root scope)
+/switch <name> [root|--root <root>] — Switch to project and load context (optional root scope)
 /fingerprints [name] [--root <root>] — Show repo remote + last commit + open PR/issue counts
 /add <path> — Add project to registry
 /remove <name> — Remove project from registry
@@ -55,8 +55,8 @@ help - Show help
 ```
 /list work
 /status personal
-/find agent-avengers
-/switch Tesella
+/find agent-avengers work
+/switch Tesella --root personal
 /fingerprints Tesella --root personal
 /add /Volumes/disk/MyProject
 /scan /path/to/workspace work
@@ -86,8 +86,10 @@ When the project path is unknown, search in order:
 
 1. **Registry lookup** — Fuzzy match name in `osori.json`
 2. **mdfind** (macOS only) — `mdfind "kMDItemFSName == '<name>'" | head -5`
-3. **find fallback** — Search paths defined in `OSORI_SEARCH_PATHS` env var. If unset, ask the user for search paths.
-   `find <search_paths> -maxdepth 4 -type d -name '<name>' 2>/dev/null`
+3. **find fallback** — Search priority:
+   1) `roots[].paths` from registry (if root is specified, that root first)
+   2) paths from `OSORI_SEARCH_PATHS`
+   Command form: `find <search_paths> -maxdepth 4 -type d -name '<name>' 2>/dev/null`
 4. **Ask the user** — If all methods fail, ask for the project path directly.
 5. Offer to register the found project in the registry.
 
@@ -103,8 +105,15 @@ Show all registered projects. Optional root filter supported in Telegram command
 (Example: `/list work`)
 
 ### Switch
-1. Search registry (fuzzy match)
-2. If not found → run "Finding Projects" flow above
+Supports optional root scope:
+
+```bash
+/switch <name> [root|--root <root>]
+```
+
+Flow:
+1. Search registry (fuzzy match, root-prioritized if provided)
+2. If not found → run "Finding Projects" flow above and suggest add path
 3. Load context:
    - `git status --short`
    - `git branch --show-current`

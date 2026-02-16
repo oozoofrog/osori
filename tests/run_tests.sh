@@ -242,6 +242,57 @@ assert_contains "telegram status total one" "$status_out" "Total: 1"
 teardown_test
 
 echo ""
+echo "=== test_switch_root_filter ==="
+setup_test
+export OSORI_ROOT_KEY="work"
+bash "$PROJECT_ROOT/scripts/add-project.sh" "$TEST_TMP/fake-project" --name "switch-work" >/dev/null 2>&1
+mkdir -p "$TEST_TMP/switch-personal"
+git -C "$TEST_TMP/switch-personal" init -q 2>/dev/null
+git -C "$TEST_TMP/switch-personal" config user.email "test@example.com"
+git -C "$TEST_TMP/switch-personal" config user.name "osori-test"
+echo "p" > "$TEST_TMP/switch-personal/README.md"
+git -C "$TEST_TMP/switch-personal" add README.md >/dev/null 2>&1
+git -C "$TEST_TMP/switch-personal" commit -m "init" >/dev/null 2>&1 || true
+export OSORI_ROOT_KEY="personal"
+bash "$PROJECT_ROOT/scripts/add-project.sh" "$TEST_TMP/switch-personal" --name "switch-personal" >/dev/null 2>&1
+
+ok_out=$(bash "$PROJECT_ROOT/scripts/telegram-commands.sh" switch switch-work work 2>&1)
+assert_contains "switch finds project in matching root" "$ok_out" "switch-work"
+assert_contains "switch output root label" "$ok_out" "root: work"
+
+ok_out_flag=$(bash "$PROJECT_ROOT/scripts/telegram-commands.sh" switch switch-work --root work 2>&1)
+assert_contains "switch supports --root flag" "$ok_out_flag" "switch-work"
+
+bad_out=$(bash "$PROJECT_ROOT/scripts/telegram-commands.sh" switch switch-work personal 2>&1 || true)
+assert_contains "switch mismatch root not found" "$bad_out" "not found in root 'personal'"
+teardown_test
+
+echo ""
+echo "=== test_find_uses_registry_root_paths_priority ==="
+setup_test
+mkdir -p "$TEST_TMP/work-root/priority-proj"
+mkdir -p "$TEST_TMP/env-root/priority-proj"
+
+cat > "$TEST_TMP/osori.json" << JSONEOF
+{
+  "schema": "osori.registry",
+  "version": 2,
+  "updatedAt": "2026-02-16T00:00:00Z",
+  "roots": [
+    {"key": "default", "label": "Default", "paths": []},
+    {"key": "work", "label": "Work", "paths": ["$TEST_TMP/work-root"]}
+  ],
+  "projects": []
+}
+JSONEOF
+
+find_out=$(OSORI_SEARCH_PATHS="$TEST_TMP/env-root" bash "$PROJECT_ROOT/scripts/telegram-commands.sh" find priority-proj work 2>&1)
+assert_contains "find via search output" "$find_out" "Found via search"
+assert_contains "find prefers root path over env path" "$find_out" "$TEST_TMP/work-root/priority-proj"
+assert_not_contains "find does not pick env path first" "$find_out" "$TEST_TMP/env-root/priority-proj"
+teardown_test
+
+echo ""
 echo "=== test_telegram_scan_root_arg ==="
 setup_test
 mkdir -p "$TEST_TMP/scan-repos/proj1"

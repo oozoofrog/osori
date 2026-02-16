@@ -22,8 +22,8 @@ show_help() {
 
 /list [root] — Show all projects (optionally filter by root)
 /status [root] — Check project statuses (optionally filter by root)
-/find <name> — Find a project path
-/switch <name> — Switch to project & load context
+/find <name> [root|--root <root>] — Find a project path (optional root scope)
+/switch <name> [root|--root <root>] — Switch to project & load context (optional root scope)
 /fingerprints [name] [--root <root>] — Show repo/commit/PR/issue fingerprints
 /add <path> — Add project to registry
 /remove <name> — Remove project from registry
@@ -33,8 +33,8 @@ show_help() {
 *Examples:*
 `/list work`
 `/status personal`
-`/find agent-avengers`
-`/switch Tesella`
+`/find agent-avengers work`
+`/switch Tesella --root personal`
 `/fingerprints Tesella --root personal`
 `/scan /path/to/workspace work`
 EOF
@@ -145,25 +145,68 @@ PYSCRIPT
 }
 
 cmd_find() {
-    local name="${1:-}"
-    [[ -z "$name" ]] && { echo "❌ Usage: /find <project-name>"; exit 1; }
+    local name=""
+    local root_filter=""
 
-    OSORI_NAME="$name" OSORI_SCRIPT_DIR="$SCRIPT_DIR" OSORI_REG="$REGISTRY_FILE" python3 << 'PYSCRIPT'
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --root)
+                root_filter="${2:-}"
+                shift 2
+                ;;
+            *)
+                if [[ -z "$name" ]]; then
+                    name="$1"
+                elif [[ -z "$root_filter" ]]; then
+                    root_filter="$1"
+                fi
+                shift
+                ;;
+        esac
+    done
+
+    [[ -z "$name" ]] && { echo "❌ Usage: /find <project-name> [root|--root <root>]"; exit 1; }
+
+    OSORI_NAME="$name" OSORI_ROOT_FILTER="$root_filter" OSORI_SCRIPT_DIR="$SCRIPT_DIR" OSORI_REG="$REGISTRY_FILE" python3 << 'PYSCRIPT'
 import os
 import shutil
 import subprocess
 import sys
 
 sys.path.insert(0, os.environ["OSORI_SCRIPT_DIR"])
-from registry_lib import load_registry, registry_projects
+from registry_lib import (
+    filter_projects,
+    load_registry,
+    normalize_root_key,
+    registry_projects,
+    registry_roots,
+    search_paths_for_discovery,
+)
+
+
+def within_any(path, roots):
+    rp = os.path.realpath(path)
+    for root in roots:
+        rr = os.path.realpath(root)
+        try:
+            if os.path.commonpath([rp, rr]) == rr:
+                return True
+        except Exception:
+            continue
+    return False
+
 
 name = os.environ["OSORI_NAME"].strip()
 query = name.lower()
+root_filter = os.environ.get("OSORI_ROOT_FILTER", "").strip()
 
 res = load_registry(os.environ["OSORI_REG"], auto_migrate=True, make_backup_on_migrate=True)
-projects = registry_projects(res.registry)
+projects = filter_projects(registry_projects(res.registry), root_key=root_filter)
+root_key = normalize_root_key(root_filter)
+roots_meta = registry_roots(res.registry)
+root_keys = [r.get("key", "default") for r in roots_meta]
 
-# 1) Registry lookup
+# 1) Registry lookup (root-prioritized when root_filter is set)
 for p in projects:
     pname = p.get('name', '')
     if query in pname.lower():
@@ -181,18 +224,29 @@ for p in projects:
                 print(f"ℹ️ Migration backup: {res.backup_path}")
         raise SystemExit(0)
 
+# Build prioritized search paths from roots[].paths + OSORI_SEARCH_PATHS
+search_paths = search_paths_for_discovery(
+    res.registry,
+    root_key=root_filter,
+    env_paths=os.environ.get('OSORI_SEARCH_PATHS', ''),
+)
+
 # 2) Spotlight (macOS)
 if shutil.which('mdfind'):
     r = subprocess.run(['mdfind', f'kMDItemFSName == "{name}"'], capture_output=True, text=True)
-    if r.stdout.strip():
-        print("🔍 *Found via Spotlight:*")
-        for p in r.stdout.strip().split('\n')[:3]:
-            print(f"📍 {p}")
-        raise SystemExit(0)
+    lines = [line for line in r.stdout.strip().split('\n') if line.strip()]
+    if lines:
+        if root_key:
+            root_only_paths = search_paths_for_discovery(res.registry, root_key=root_filter, env_paths='')
+            if root_only_paths:
+                lines = [line for line in lines if within_any(line, root_only_paths)]
+        if lines:
+            print("🔍 *Found via Spotlight:*")
+            for p in lines[:3]:
+                print(f"📍 {p}")
+            raise SystemExit(0)
 
-# 3) find fallback
-paths_env = os.environ.get('OSORI_SEARCH_PATHS', '').strip()
-search_paths = [p for p in paths_env.split(':') if p] if paths_env else []
+# 3) find fallback (root paths first)
 for sp in search_paths:
     if not os.path.exists(sp):
         continue
@@ -200,23 +254,47 @@ for sp in search_paths:
         ['find', sp, '-maxdepth', '4', '-type', 'd', '-name', f'*{name}*'],
         capture_output=True, text=True, timeout=10,
     )
-    if r.stdout.strip():
+    lines = [line for line in r.stdout.strip().split('\n') if line.strip()]
+    if lines:
         print("🔍 *Found via search:*")
-        for p in r.stdout.strip().split('\n')[:3]:
+        for p in lines[:3]:
             print(f"📍 {p}")
         raise SystemExit(0)
 
+if root_key and root_key not in root_keys:
+    print(f"ℹ️ Unknown root '{root_key}'. Available roots: {', '.join(root_keys)}")
+
 if not search_paths:
-    print("ℹ️ Tip: set OSORI_SEARCH_PATHS for fallback discovery (e.g. /work:/personal)")
+    print("ℹ️ Tip: set roots[].paths in registry or OSORI_SEARCH_PATHS for fallback discovery")
+
 print(f"❌ Project '{name}' not found.")
 PYSCRIPT
 }
 
 cmd_switch() {
-    local name="${1:-}"
-    [[ -z "$name" ]] && { echo "❌ Usage: /switch <project-name>"; exit 1; }
+    local name=""
+    local root_filter=""
 
-    OSORI_NAME="$name" OSORI_SCRIPT_DIR="$SCRIPT_DIR" OSORI_REG="$REGISTRY_FILE" python3 << 'PYSCRIPT'
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --root)
+                root_filter="${2:-}"
+                shift 2
+                ;;
+            *)
+                if [[ -z "$name" ]]; then
+                    name="$1"
+                elif [[ -z "$root_filter" ]]; then
+                    root_filter="$1"
+                fi
+                shift
+                ;;
+        esac
+    done
+
+    [[ -z "$name" ]] && { echo "❌ Usage: /switch <project-name> [root|--root <root>]"; exit 1; }
+
+    OSORI_NAME="$name" OSORI_ROOT_FILTER="$root_filter" OSORI_SCRIPT_DIR="$SCRIPT_DIR" OSORI_REG="$REGISTRY_FILE" python3 << 'PYSCRIPT'
 import json
 import os
 import shutil
@@ -224,7 +302,15 @@ import subprocess
 import sys
 
 sys.path.insert(0, os.environ["OSORI_SCRIPT_DIR"])
-from registry_lib import load_registry, parse_repo_from_remote, registry_projects
+from registry_lib import (
+    filter_projects,
+    load_registry,
+    normalize_root_key,
+    parse_repo_from_remote,
+    registry_projects,
+    registry_roots,
+    search_paths_for_discovery,
+)
 
 
 def run(cmd, timeout=8):
@@ -246,9 +332,15 @@ def gh_count(kind, repo):
     except Exception:
         return "n/a"
 
-name = os.environ["OSORI_NAME"].strip().lower()
+
+name_raw = os.environ["OSORI_NAME"].strip()
+name = name_raw.lower()
+root_filter = os.environ.get("OSORI_ROOT_FILTER", "").strip()
+root_key = normalize_root_key(root_filter)
+
 res = load_registry(os.environ["OSORI_REG"], auto_migrate=True, make_backup_on_migrate=True)
-projects = registry_projects(res.registry)
+projects = filter_projects(registry_projects(res.registry), root_key=root_filter)
+roots = [r.get("key", "default") for r in registry_roots(res.registry)]
 
 target = None
 for p in projects:
@@ -257,7 +349,38 @@ for p in projects:
         break
 
 if not target:
-    print(f"❌ Project '{os.environ['OSORI_NAME']}' not found in registry.")
+    if root_key:
+        print(f"❌ Project '{name_raw}' not found in root '{root_key}' registry.")
+    else:
+        print(f"❌ Project '{name_raw}' not found in registry.")
+
+    if root_key and root_key not in roots:
+        print(f"ℹ️ Available roots: {', '.join(roots)}")
+
+    # Suggest possible paths using prioritized discovery paths
+    search_paths = search_paths_for_discovery(res.registry, root_key=root_filter, env_paths=os.environ.get('OSORI_SEARCH_PATHS', ''))
+    hints = []
+    for sp in search_paths:
+        if not os.path.exists(sp):
+            continue
+        rc, out, _ = run(['find', sp, '-maxdepth', '4', '-type', 'd', '-name', f'*{name_raw}*'], timeout=10)
+        if rc != 0 or not out:
+            continue
+        for line in out.split('\n'):
+            line = line.strip()
+            if line:
+                hints.append(line)
+            if len(hints) >= 3:
+                break
+        if hints:
+            break
+
+    if hints:
+        print("\n🔍 Possible paths:")
+        for h in hints:
+            print(f"  - {h}")
+        print("\nUse /add <path> then /switch again.")
+
     raise SystemExit(1)
 
 path = target.get('path', '')
@@ -386,8 +509,8 @@ fi
 case "$command" in
     list) cmd_list "${1:-}" ;;
     status) cmd_status "${1:-}" ;;
-    find) cmd_find "${1:-}" ;;
-    switch) cmd_switch "${1:-}" ;;
+    find) cmd_find "$@" ;;
+    switch) cmd_switch "$@" ;;
     fingerprints) cmd_fingerprints "$@" ;;
     add) cmd_add "${1:-}" ;;
     remove) cmd_remove "${1:-}" ;;
