@@ -606,6 +606,38 @@ assert_contains "favorites empty message" "$favs_out2" "No favorite projects"
 teardown_test
 
 echo ""
+echo "=== test_entire_manager_commands ==="
+setup_test
+
+bash "$PROJECT_ROOT/scripts/add-project.sh" "$TEST_TMP/fake-project" --name "entire-proj" >/dev/null 2>&1
+FAKE_BIN="$TEST_TMP/fake-bin"
+mkdir -p "$FAKE_BIN"
+cat > "$FAKE_BIN/entire" << 'FAKEEOF'
+#!/usr/bin/env bash
+echo "FAKE_ENTIRE cwd=$(pwd) args=$*"
+FAKEEOF
+chmod +x "$FAKE_BIN/entire"
+
+ent_status_out=$(PATH="$FAKE_BIN:$PATH" bash "$PROJECT_ROOT/scripts/telegram-commands.sh" entire-status entire-proj 2>&1)
+assert_contains "entire-status uses fake cli" "$ent_status_out" "FAKE_ENTIRE"
+assert_contains "entire-status runs detailed status" "$ent_status_out" "args=status --detailed"
+assert_contains "entire-status runs in project path" "$ent_status_out" "cwd=$TEST_TMP/fake-project"
+
+ent_rewind_out=$(PATH="$FAKE_BIN:$PATH" bash "$PROJECT_ROOT/scripts/telegram-commands.sh" entire-rewind-list entire-proj 2>&1)
+assert_contains "entire-rewind-list runs list mode" "$ent_rewind_out" "args=rewind --list"
+
+ent_enable_default_out=$(PATH="$FAKE_BIN:$PATH" bash "$PROJECT_ROOT/scripts/telegram-commands.sh" entire-enable entire-proj 2>&1)
+assert_contains "entire-enable default command" "$ent_enable_default_out" "args=enable"
+assert_contains "entire-enable defaults agent" "$ent_enable_default_out" "--agent claude-code"
+assert_contains "entire-enable defaults strategy" "$ent_enable_default_out" "--strategy manual-commit"
+
+ent_enable_custom_out=$(PATH="$FAKE_BIN:$PATH" bash "$PROJECT_ROOT/scripts/telegram-commands.sh" entire-enable entire-proj --agent gemini --strategy auto-commit --local 2>&1)
+assert_contains "entire-enable custom agent forwarded" "$ent_enable_custom_out" "--agent gemini"
+assert_contains "entire-enable custom strategy forwarded" "$ent_enable_custom_out" "--strategy auto-commit"
+assert_contains "entire-enable custom local flag forwarded" "$ent_enable_custom_out" "--local"
+teardown_test
+
+echo ""
 echo "=== test_switch_root_filter ==="
 setup_test
 export OSORI_ROOT_KEY="work"
@@ -719,6 +751,7 @@ echo "=== test_platform_notes ==="
 skill_content=$(cat "$PROJECT_ROOT/SKILL.md")
 assert_contains "SKILL.md mentions mdfind is macOS only" "$skill_content" "macOS"
 assert_contains "SKILL.md mentions python3 dependency" "$skill_content" "python3"
+assert_contains "SKILL.md mentions entire integration" "$skill_content" "entire"
 
 # Summary
 echo ""

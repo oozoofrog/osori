@@ -37,6 +37,9 @@ show_help() {
 /favorites — Show favorite projects
 /favorite-add <project> — Mark project as favorite
 /favorite-remove <project> — Unmark favorite
+/entire-status <project> [root|--root <root>] — Show Entire status in project
+/entire-enable <project> [root|--root <root>] [--agent <name>] [--strategy <name>] — Enable Entire in project
+/entire-rewind-list <project> [root|--root <root>] — List Entire rewind points (JSON)
 /add <path> — Add project to registry
 /remove <name> — Remove project from registry
 /scan <path> [root] — Scan directory for projects (optional root key)
@@ -56,6 +59,8 @@ show_help() {
 `/root-remove work --reassign default`
 `/alias-add rh RunnersHeart`
 `/favorites`
+`/entire-status osori`
+`/entire-enable osori --agent claude-code --strategy manual-commit`
 `/scan /path/to/workspace work`
 EOF
 }
@@ -734,6 +739,21 @@ cmd_favorite_remove() {
     bash "$SCRIPT_DIR/alias-favorite-manager.sh" favorite-remove "$project"
 }
 
+cmd_entire_status() {
+    [[ $# -lt 1 ]] && { echo "❌ Usage: /entire-status <project> [root|--root <root>]"; exit 1; }
+    bash "$SCRIPT_DIR/entire-manager.sh" status "$@"
+}
+
+cmd_entire_enable() {
+    [[ $# -lt 1 ]] && { echo "❌ Usage: /entire-enable <project> [root|--root <root>] [--agent <name>] [--strategy <name>]"; exit 1; }
+    bash "$SCRIPT_DIR/entire-manager.sh" enable "$@"
+}
+
+cmd_entire_rewind_list() {
+    [[ $# -lt 1 ]] && { echo "❌ Usage: /entire-rewind-list <project> [root|--root <root>]"; exit 1; }
+    bash "$SCRIPT_DIR/entire-manager.sh" rewind-list "$@"
+}
+
 # Main dispatch
 command="${1:-help}"
 if [[ $# -gt 0 ]]; then
@@ -758,6 +778,9 @@ case "$command" in
     favorites) cmd_favorites ;;
     favorite-add) cmd_favorite_add "${1:-}" ;;
     favorite-remove) cmd_favorite_remove "${1:-}" ;;
+    entire-status) cmd_entire_status "$@" ;;
+    entire-enable) cmd_entire_enable "$@" ;;
+    entire-rewind-list) cmd_entire_rewind_list "$@" ;;
     add) cmd_add "${1:-}" ;;
     remove) cmd_remove "${1:-}" ;;
     scan) cmd_scan "${1:-}" "${2:-}" ;;
