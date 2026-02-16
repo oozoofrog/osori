@@ -32,6 +32,11 @@ show_help() {
 /root-path-remove <key> <path> — Remove discovery path from root
 /root-set-label <key> <label> — Update root label
 /root-remove <key> [--reassign <target>] [--force] — Safely remove root
+/alias-add <alias> <project> — Add alias for project
+/alias-remove <alias> — Remove alias
+/favorites — Show favorite projects
+/favorite-add <project> — Mark project as favorite
+/favorite-remove <project> — Unmark favorite
 /add <path> — Add project to registry
 /remove <name> — Remove project from registry
 /scan <path> [root] — Scan directory for projects (optional root key)
@@ -49,6 +54,8 @@ show_help() {
 `/root-add work Work`
 `/root-path-add work /path/to/workspace`
 `/root-remove work --reassign default`
+`/alias-add rh RunnersHeart`
+`/favorites`
 `/scan /path/to/workspace work`
 EOF
 }
@@ -193,6 +200,7 @@ from registry_lib import (
     normalize_root_key,
     registry_projects,
     registry_roots,
+    resolve_alias,
     search_paths_for_discovery,
 )
 
@@ -210,14 +218,18 @@ def within_any(path, roots):
 
 
 name = os.environ["OSORI_NAME"].strip()
-query = name.lower()
 root_filter = os.environ.get("OSORI_ROOT_FILTER", "").strip()
 
 res = load_registry(os.environ["OSORI_REG"], auto_migrate=True, make_backup_on_migrate=True)
+resolved_name = resolve_alias(name, res.registry)
+query = resolved_name.lower()
 projects = filter_projects(registry_projects(res.registry), root_key=root_filter)
 root_key = normalize_root_key(root_filter)
 roots_meta = registry_roots(res.registry)
 root_keys = [r.get("key", "default") for r in roots_meta]
+
+if resolved_name != name:
+    print(f"ℹ️ alias resolved: {name} -> {resolved_name}")
 
 # 1) Registry lookup (root-prioritized when root_filter is set)
 for p in projects:
@@ -246,7 +258,7 @@ search_paths = search_paths_for_discovery(
 
 # 2) Spotlight (macOS)
 if shutil.which('mdfind'):
-    r = subprocess.run(['mdfind', f'kMDItemFSName == "{name}"'], capture_output=True, text=True)
+    r = subprocess.run(['mdfind', f'kMDItemFSName == "{resolved_name}"'], capture_output=True, text=True)
     lines = [line for line in r.stdout.strip().split('\n') if line.strip()]
     if lines:
         if root_key:
@@ -328,6 +340,7 @@ from registry_lib import (
     parse_repo_from_remote,
     registry_projects,
     registry_roots,
+    resolve_alias,
     search_paths_for_discovery,
 )
 
@@ -391,14 +404,18 @@ def git_dirty(path):
 
 
 name_raw = os.environ["OSORI_NAME"].strip()
-name = name_raw.lower()
 root_filter = os.environ.get("OSORI_ROOT_FILTER", "").strip()
 index_arg = os.environ.get("OSORI_SWITCH_INDEX", "").strip()
 root_key = normalize_root_key(root_filter)
 
 res = load_registry(os.environ["OSORI_REG"], auto_migrate=True, make_backup_on_migrate=True)
+resolved_name = resolve_alias(name_raw, res.registry)
+name = resolved_name.lower()
 projects = filter_projects(registry_projects(res.registry), root_key=root_filter)
 roots = [r.get("key", "default") for r in registry_roots(res.registry)]
+
+if resolved_name != name_raw:
+    print(f"ℹ️ alias resolved: {name_raw} -> {resolved_name}")
 
 candidates = []
 for p in projects:
@@ -688,6 +705,35 @@ cmd_root_remove() {
     bash "$SCRIPT_DIR/root-manager.sh" remove "$key" "$@"
 }
 
+cmd_alias_add() {
+    local alias_key="${1:-}"
+    local project="${2:-}"
+    [[ -z "$alias_key" || -z "$project" ]] && { echo "❌ Usage: /alias-add <alias> <project>"; exit 1; }
+    bash "$SCRIPT_DIR/alias-favorite-manager.sh" alias-add "$alias_key" "$project"
+}
+
+cmd_alias_remove() {
+    local alias_key="${1:-}"
+    [[ -z "$alias_key" ]] && { echo "❌ Usage: /alias-remove <alias>"; exit 1; }
+    bash "$SCRIPT_DIR/alias-favorite-manager.sh" alias-remove "$alias_key"
+}
+
+cmd_favorites() {
+    bash "$SCRIPT_DIR/alias-favorite-manager.sh" favorites
+}
+
+cmd_favorite_add() {
+    local project="${1:-}"
+    [[ -z "$project" ]] && { echo "❌ Usage: /favorite-add <project>"; exit 1; }
+    bash "$SCRIPT_DIR/alias-favorite-manager.sh" favorite-add "$project"
+}
+
+cmd_favorite_remove() {
+    local project="${1:-}"
+    [[ -z "$project" ]] && { echo "❌ Usage: /favorite-remove <project>"; exit 1; }
+    bash "$SCRIPT_DIR/alias-favorite-manager.sh" favorite-remove "$project"
+}
+
 # Main dispatch
 command="${1:-help}"
 if [[ $# -gt 0 ]]; then
@@ -707,6 +753,11 @@ case "$command" in
     root-path-remove) cmd_root_path_remove "$@" ;;
     root-set-label) cmd_root_set_label "$@" ;;
     root-remove) cmd_root_remove "$@" ;;
+    alias-add) cmd_alias_add "${1:-}" "${2:-}" ;;
+    alias-remove) cmd_alias_remove "${1:-}" ;;
+    favorites) cmd_favorites ;;
+    favorite-add) cmd_favorite_add "${1:-}" ;;
+    favorite-remove) cmd_favorite_remove "${1:-}" ;;
     add) cmd_add "${1:-}" ;;
     remove) cmd_remove "${1:-}" ;;
     scan) cmd_scan "${1:-}" "${2:-}" ;;
