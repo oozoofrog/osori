@@ -325,7 +325,7 @@ has_high_risk = risk_summary.get("high", 0) > 0
 # (output is generated at the end)
 
 
-# ── Phase 4: Apply (only if --fix and allowed) ──────
+# ── Phase 4: Apply (plan-driven, only if --fix) ─────
 
 fix_applied = False
 fix_backup = None
@@ -335,41 +335,69 @@ dedupe_removed = 0
 actions_applied = []
 actions_blocked = []
 
+
+def apply_action(action_entry):
+    """Execute a single plan action. Returns True if applied."""
+    act = action_entry["action"]
+
+    if act in ("migrate_legacy", "migrate_version", "fix_schema", "initialize"):
+        # Handled by load_registry(auto_migrate=True)
+        return True
+
+    if act == "reinitialize":
+        # Handled by load_registry corruption path
+        return True
+
+    if act in ("dedupe_name", "dedupe_path"):
+        # Handled by dedupe pass below
+        return True
+
+    if act == "add_missing_root":
+        # Handled by load_registry normalization (adds missing roots)
+        return True
+
+    return False
+
+
 if do_fix and plan:
-    # Determine which actions to apply
+    # Gate actions by risk level
     for p in plan:
         risk = p["risk"]
-        if risk == "high":
-            # high risk blocked unless auto_yes (which still requires --fix, already true here)
-            if not auto_yes:
-                actions_blocked.append(p)
-                continue
-        actions_applied.append(p)
+        if risk == "high" and not auto_yes:
+            actions_blocked.append(p)
+            continue
+        if apply_action(p):
+            actions_applied.append(p)
+        else:
+            actions_blocked.append(p)
 
-    # Actually apply fixes via load_registry
+    # Run load_registry to apply migration/normalization actions
     loaded = load_registry(reg_path, auto_migrate=True, make_backup_on_migrate=True)
     migration_notes = loaded.migration_notes if loaded.migrated else []
     migration_backup = loaded.backup_path
     registry = loaded.registry
 
-    # Safe fix: remove exact duplicate entries by (name, path)
-    projects = registry_projects(registry)
-    seen = set()
-    deduped = []
-    for p in projects:
-        key = (str(p.get("name", "")).strip(), str(p.get("path", "")).strip())
-        if key in seen:
-            dedupe_removed += 1
-            continue
-        seen.add(key)
-        deduped.append(p)
+    # Dedupe pass (applies dedupe_name / dedupe_path actions)
+    has_dedupe = any(a["action"] in ("dedupe_name", "dedupe_path") for a in actions_applied)
+    if has_dedupe:
+        projects = registry_projects(registry)
+        seen = set()
+        deduped = []
+        for p in projects:
+            key = (str(p.get("name", "")).strip(), str(p.get("path", "")).strip())
+            if key in seen:
+                dedupe_removed += 1
+                continue
+            seen.add(key)
+            deduped.append(p)
 
-    if dedupe_removed > 0:
-        set_registry_projects(registry, deduped)
-        fix_backup = save_registry(reg_path, registry, make_backup=True)
+        if dedupe_removed > 0:
+            set_registry_projects(registry, deduped)
+            fix_backup = save_registry(reg_path, registry, make_backup=True)
 
     fix_applied = True
 
+    # Report applied actions
     if migration_notes:
         add("info", "fix.migration_applied", f"migration applied: {'; '.join(migration_notes)}")
     if migration_backup:
