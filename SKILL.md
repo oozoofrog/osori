@@ -1,6 +1,8 @@
 ---
 name: osori
 description: "Osori v1.6.0 — Local project registry & context loader with Telegram slash commands. Registry versioning + auto-migration + root filters + root management + doctor (preview-first + risk gate) + safe root remove + switch multi-match + GitHub count cache + alias/favorite + Entire integration commands. Find, switch, list, add/remove projects, check status. Triggers: work on X, find project X, list projects, project status, project switch. | 오소리 — 텔레그램 슬래시 명령어 지원 로컬 프로젝트 레지스트리."
+homepage: https://github.com/oozoofrog/osori
+metadata: { "openclaw": { "emoji": "🦦", "requires": { "bins": ["python3", "git", "gh"] }, "os": ["darwin", "linux"] } }
 ---
 
 # Osori (오소리)
@@ -189,8 +191,8 @@ Show a one-shot project fingerprint view:
 - open issue count
 
 ```bash
-bash skills/osori/scripts/project-fingerprints.sh [project-name]
-bash skills/osori/scripts/project-fingerprints.sh --root <root-key> [project-name]
+bash {baseDir}/scripts/project-fingerprints.sh [project-name]
+bash {baseDir}/scripts/project-fingerprints.sh --root <root-key> [project-name]
 ```
 
 GitHub open-count cache (PR/Issue):
@@ -202,14 +204,14 @@ GitHub open-count cache (PR/Issue):
 
 ### Add
 ```bash
-bash skills/osori/scripts/add-project.sh <path> [--tag <tag>] [--name <name>]
+bash {baseDir}/scripts/add-project.sh <path> [--tag <tag>] [--name <name>]
 ```
 Auto-detects: git remote, language, description.
 
 ### Scan
 ```bash
-bash skills/osori/scripts/scan-projects.sh <root-dir> [--depth 3]
-OSORI_ROOT_KEY=work bash skills/osori/scripts/scan-projects.sh <root-dir> [--depth 3]
+bash {baseDir}/scripts/scan-projects.sh <root-dir> [--depth 3]
+OSORI_ROOT_KEY=work bash {baseDir}/scripts/scan-projects.sh <root-dir> [--depth 3]
 ```
 Bulk-scan a directory for git repos and add them to the registry.
 
@@ -252,7 +254,7 @@ Risk levels:
 Shell equivalent:
 
 ```bash
-bash skills/osori/scripts/doctor.sh [--fix] [--dry-run] [--yes] [--json]
+bash {baseDir}/scripts/doctor.sh [--fix] [--dry-run] [--yes] [--json]
 ```
 
 See also: [Doctor Safe Fix Guide](docs/examples/doctor-safe-fix.md)
@@ -271,12 +273,12 @@ See also: [Doctor Safe Fix Guide](docs/examples/doctor-safe-fix.md)
 Shell equivalents:
 
 ```bash
-bash skills/osori/scripts/root-manager.sh list
-bash skills/osori/scripts/root-manager.sh add <key> [label]
-bash skills/osori/scripts/root-manager.sh path-add <key> <path>
-bash skills/osori/scripts/root-manager.sh path-remove <key> <path>
-bash skills/osori/scripts/root-manager.sh set-label <key> <label>
-bash skills/osori/scripts/root-manager.sh remove <key> [--reassign <target>] [--force]
+bash {baseDir}/scripts/root-manager.sh list
+bash {baseDir}/scripts/root-manager.sh add <key> [label]
+bash {baseDir}/scripts/root-manager.sh path-add <key> <path>
+bash {baseDir}/scripts/root-manager.sh path-remove <key> <path>
+bash {baseDir}/scripts/root-manager.sh set-label <key> <label>
+bash {baseDir}/scripts/root-manager.sh remove <key> [--reassign <target>] [--force]
 ```
 
 Safety rules for remove:
@@ -298,12 +300,12 @@ Safety rules for remove:
 Shell equivalents:
 
 ```bash
-bash skills/osori/scripts/alias-favorite-manager.sh alias-add <alias> <project>
-bash skills/osori/scripts/alias-favorite-manager.sh alias-remove <alias>
-bash skills/osori/scripts/alias-favorite-manager.sh aliases
-bash skills/osori/scripts/alias-favorite-manager.sh favorite-add <project>
-bash skills/osori/scripts/alias-favorite-manager.sh favorite-remove <project>
-bash skills/osori/scripts/alias-favorite-manager.sh favorites
+bash {baseDir}/scripts/alias-favorite-manager.sh alias-add <alias> <project>
+bash {baseDir}/scripts/alias-favorite-manager.sh alias-remove <alias>
+bash {baseDir}/scripts/alias-favorite-manager.sh aliases
+bash {baseDir}/scripts/alias-favorite-manager.sh favorite-add <project>
+bash {baseDir}/scripts/alias-favorite-manager.sh favorite-remove <project>
+bash {baseDir}/scripts/alias-favorite-manager.sh favorites
 ```
 
 Aliases are case-insensitive and are resolved by `/find`, `/switch`, and `project-fingerprints.sh` name queries.
@@ -321,9 +323,9 @@ Run Entire CLI commands in a registered project context:
 Shell equivalent:
 
 ```bash
-bash skills/osori/scripts/entire-manager.sh status <project> [root|--root <root>]
-bash skills/osori/scripts/entire-manager.sh enable <project> [root|--root <root>] [entire enable flags...]
-bash skills/osori/scripts/entire-manager.sh rewind-list <project> [root|--root <root>]
+bash {baseDir}/scripts/entire-manager.sh status <project> [root|--root <root>]
+bash {baseDir}/scripts/entire-manager.sh enable <project> [root|--root <root>] [entire enable flags...]
+bash {baseDir}/scripts/entire-manager.sh rewind-list <project> [root|--root <root>]
 ```
 
 Defaults:
