@@ -25,6 +25,11 @@ show_help() {
 /find <name> [root|--root <root>] — Find a project path (optional root scope)
 /switch <name> [root|--root <root>] — Switch to project & load context (optional root scope)
 /fingerprints [name] [--root <root>] — Show repo/commit/PR/issue fingerprints
+/list-roots — List roots, labels, paths, project counts
+/root-add <key> [label] — Add/update root
+/root-path-add <key> <path> — Add discovery path to root
+/root-path-remove <key> <path> — Remove discovery path from root
+/root-set-label <key> <label> — Update root label
 /add <path> — Add project to registry
 /remove <name> — Remove project from registry
 /scan <path> [root] — Scan directory for projects (optional root key)
@@ -36,6 +41,9 @@ show_help() {
 `/find agent-avengers work`
 `/switch Tesella --root personal`
 `/fingerprints Tesella --root personal`
+`/list-roots`
+`/root-add work Work`
+`/root-path-add work /path/to/workspace`
 `/scan /path/to/workspace work`
 EOF
 }
@@ -500,6 +508,47 @@ cmd_scan() {
     fi
 }
 
+cmd_list_roots() {
+    bash "$SCRIPT_DIR/root-manager.sh" list
+}
+
+cmd_root_add() {
+    local key="${1:-}"
+    shift || true
+    local label="${*:-}"
+
+    [[ -z "$key" ]] && { echo "❌ Usage: /root-add <key> [label]"; exit 1; }
+
+    if [[ -n "$label" ]]; then
+      bash "$SCRIPT_DIR/root-manager.sh" add "$key" "$label"
+    else
+      bash "$SCRIPT_DIR/root-manager.sh" add "$key"
+    fi
+}
+
+cmd_root_path_add() {
+    local key="${1:-}"
+    local path="${2:-}"
+    [[ -z "$key" || -z "$path" ]] && { echo "❌ Usage: /root-path-add <key> <path>"; exit 1; }
+    bash "$SCRIPT_DIR/root-manager.sh" path-add "$key" "$path"
+}
+
+cmd_root_path_remove() {
+    local key="${1:-}"
+    local path="${2:-}"
+    [[ -z "$key" || -z "$path" ]] && { echo "❌ Usage: /root-path-remove <key> <path>"; exit 1; }
+    bash "$SCRIPT_DIR/root-manager.sh" path-remove "$key" "$path"
+}
+
+cmd_root_set_label() {
+    local key="${1:-}"
+    shift || true
+    local label="${*:-}"
+
+    [[ -z "$key" || -z "$label" ]] && { echo "❌ Usage: /root-set-label <key> <label>"; exit 1; }
+    bash "$SCRIPT_DIR/root-manager.sh" set-label "$key" "$label"
+}
+
 # Main dispatch
 command="${1:-help}"
 if [[ $# -gt 0 ]]; then
@@ -512,6 +561,11 @@ case "$command" in
     find) cmd_find "$@" ;;
     switch) cmd_switch "$@" ;;
     fingerprints) cmd_fingerprints "$@" ;;
+    list-roots|roots) cmd_list_roots ;;
+    root-add) cmd_root_add "$@" ;;
+    root-path-add) cmd_root_path_add "$@" ;;
+    root-path-remove) cmd_root_path_remove "$@" ;;
+    root-set-label) cmd_root_set_label "$@" ;;
     add) cmd_add "${1:-}" ;;
     remove) cmd_remove "${1:-}" ;;
     scan) cmd_scan "${1:-}" "${2:-}" ;;

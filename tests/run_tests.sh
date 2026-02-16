@@ -242,6 +242,64 @@ assert_contains "telegram status total one" "$status_out" "Total: 1"
 teardown_test
 
 echo ""
+echo "=== test_root_manager_commands ==="
+setup_test
+mkdir -p "$TEST_TMP/root-work"
+
+list0=$(bash "$PROJECT_ROOT/scripts/root-manager.sh" list 2>&1)
+assert_contains "root-manager list shows default" "$list0" "default"
+
+add_out=$(bash "$PROJECT_ROOT/scripts/root-manager.sh" add work Work 2>&1)
+assert_contains "root-manager add root" "$add_out" "Added root: work"
+
+path_add_out=$(bash "$PROJECT_ROOT/scripts/root-manager.sh" path-add work "$TEST_TMP/root-work" 2>&1)
+assert_contains "root-manager add path" "$path_add_out" "Added path to root 'work'"
+
+label_out=$(bash "$PROJECT_ROOT/scripts/root-manager.sh" set-label work "Work Team" 2>&1)
+assert_contains "root-manager set label" "$label_out" "Updated label for root 'work': Work Team"
+
+list1=$(bash "$PROJECT_ROOT/scripts/root-manager.sh" list 2>&1)
+assert_contains "root-manager list shows work root" "$list1" "work"
+assert_contains "root-manager list shows updated label" "$list1" "Work Team"
+assert_contains "root-manager list shows root path" "$list1" "$TEST_TMP/root-work"
+
+path_remove_out=$(bash "$PROJECT_ROOT/scripts/root-manager.sh" path-remove work "$TEST_TMP/root-work" 2>&1)
+assert_contains "root-manager remove path" "$path_remove_out" "Removed path from root 'work'"
+
+list2=$(bash "$PROJECT_ROOT/scripts/root-manager.sh" list 2>&1)
+assert_not_contains "root-manager path removed from list" "$list2" "$TEST_TMP/root-work"
+teardown_test
+
+echo ""
+echo "=== test_telegram_root_management_commands ==="
+setup_test
+mkdir -p "$TEST_TMP/tg-root-path"
+
+roots_out=$(bash "$PROJECT_ROOT/scripts/telegram-commands.sh" list-roots 2>&1)
+assert_contains "telegram list-roots works" "$roots_out" "Roots"
+
+root_add_out=$(bash "$PROJECT_ROOT/scripts/telegram-commands.sh" root-add work Work 2>&1)
+assert_contains "telegram root-add works" "$root_add_out" "Added root: work"
+
+root_path_add_out=$(bash "$PROJECT_ROOT/scripts/telegram-commands.sh" root-path-add work "$TEST_TMP/tg-root-path" 2>&1)
+assert_contains "telegram root-path-add works" "$root_path_add_out" "Added path to root 'work'"
+
+root_label_out=$(bash "$PROJECT_ROOT/scripts/telegram-commands.sh" root-set-label work "Work Team" 2>&1)
+assert_contains "telegram root-set-label works" "$root_label_out" "Updated label for root 'work': Work Team"
+
+roots_after=$(bash "$PROJECT_ROOT/scripts/telegram-commands.sh" list-roots 2>&1)
+assert_contains "telegram list-roots shows work root" "$roots_after" "work"
+assert_contains "telegram list-roots shows label" "$roots_after" "Work Team"
+assert_contains "telegram list-roots shows path" "$roots_after" "$TEST_TMP/tg-root-path"
+
+root_path_remove_out=$(bash "$PROJECT_ROOT/scripts/telegram-commands.sh" root-path-remove work "$TEST_TMP/tg-root-path" 2>&1)
+assert_contains "telegram root-path-remove works" "$root_path_remove_out" "Removed path from root 'work'"
+
+roots_final=$(bash "$PROJECT_ROOT/scripts/telegram-commands.sh" list-roots 2>&1)
+assert_not_contains "telegram list-roots path removed" "$roots_final" "$TEST_TMP/tg-root-path"
+teardown_test
+
+echo ""
 echo "=== test_switch_root_filter ==="
 setup_test
 export OSORI_ROOT_KEY="work"
