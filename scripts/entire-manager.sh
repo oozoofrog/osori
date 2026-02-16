@@ -187,7 +187,7 @@ run_for_project() {
         enable_args+=("--strategy" "manual-commit")
       fi
 
-      if [[ "${enable_args[*]-}" != "" ]]; then
+      if [[ ${#enable_args[@]} -gt 0 ]]; then
         entire enable "${enable_args[@]}"
       else
         entire enable
