@@ -321,6 +321,61 @@ assert_contains "fingerprints includes issue count field" "$output" "open issues
 teardown_test
 
 echo ""
+echo "=== test_github_cache_ttl ==="
+setup_test
+
+# fake gh command to count invocations
+mkdir -p "$TEST_TMP/fakebin"
+COUNT_FILE="$TEST_TMP/gh-call-count.txt"
+echo 0 > "$COUNT_FILE"
+cat > "$TEST_TMP/fakebin/gh" << 'SHEOF'
+#!/usr/bin/env bash
+set -euo pipefail
+COUNT_FILE="${OSORI_FAKE_GH_COUNT_FILE:?}"
+count=$(cat "$COUNT_FILE" 2>/dev/null || echo 0)
+echo $((count+1)) > "$COUNT_FILE"
+if [[ "${1:-}" == "pr" && "${2:-}" == "list" ]]; then
+  echo '[{"number":1},{"number":2}]'
+elif [[ "${1:-}" == "issue" && "${2:-}" == "list" ]]; then
+  echo '[{"number":10}]'
+else
+  echo '[]'
+fi
+SHEOF
+chmod +x "$TEST_TMP/fakebin/gh"
+
+# prepare project with repo slug
+mkdir -p "$TEST_TMP/cache-proj"
+git -C "$TEST_TMP/cache-proj" init -q 2>/dev/null
+git -C "$TEST_TMP/cache-proj" config user.email "test@example.com"
+git -C "$TEST_TMP/cache-proj" config user.name "osori-test"
+echo "cache" > "$TEST_TMP/cache-proj/README.md"
+git -C "$TEST_TMP/cache-proj" add README.md >/dev/null 2>&1
+git -C "$TEST_TMP/cache-proj" commit -m "init" >/dev/null 2>&1 || true
+git -C "$TEST_TMP/cache-proj" remote add origin "https://github.com/example/cache-proj.git"
+
+bash "$PROJECT_ROOT/scripts/add-project.sh" "$TEST_TMP/cache-proj" --name "cache-proj" >/dev/null 2>&1
+
+# first run: miss => 2 calls (pr + issue)
+PATH="$TEST_TMP/fakebin:$PATH" OSORI_FAKE_GH_COUNT_FILE="$COUNT_FILE" OSORI_CACHE_FILE="$TEST_TMP/osori-cache.json" OSORI_CACHE_TTL=600 \
+  bash "$PROJECT_ROOT/scripts/project-fingerprints.sh" cache-proj >/dev/null 2>&1
+count1=$(cat "$COUNT_FILE")
+assert_eq "cache miss triggers two gh calls" "2" "$count1"
+
+# second run with same TTL: hit => no additional calls
+PATH="$TEST_TMP/fakebin:$PATH" OSORI_FAKE_GH_COUNT_FILE="$COUNT_FILE" OSORI_CACHE_FILE="$TEST_TMP/osori-cache.json" OSORI_CACHE_TTL=600 \
+  bash "$PROJECT_ROOT/scripts/project-fingerprints.sh" cache-proj >/dev/null 2>&1
+count2=$(cat "$COUNT_FILE")
+assert_eq "cache hit avoids extra gh calls" "2" "$count2"
+
+# third run with TTL 0: miss => +2 calls
+PATH="$TEST_TMP/fakebin:$PATH" OSORI_FAKE_GH_COUNT_FILE="$COUNT_FILE" OSORI_CACHE_FILE="$TEST_TMP/osori-cache.json" OSORI_CACHE_TTL=0 \
+  bash "$PROJECT_ROOT/scripts/project-fingerprints.sh" cache-proj >/dev/null 2>&1
+count3=$(cat "$COUNT_FILE")
+assert_eq "ttl 0 forces refresh calls" "4" "$count3"
+teardown_test
+
+echo ""
 echo "=== test_root_key_override ==="
 setup_test
 export OSORI_ROOT_KEY="work"

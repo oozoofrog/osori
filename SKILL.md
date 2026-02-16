@@ -1,6 +1,6 @@
 ---
 name: osori
-description: "Osori v1.5.0-rc1 — Local project registry & context loader with Telegram slash commands. Registry versioning + auto-migration + fingerprints view + root filters + root management + doctor health checks + safe root remove. Find, switch, list, add/remove projects, check status. Triggers: work on X, find project X, list projects, project status, project switch. | 오소리 — 텔레그램 슬래시 명령어 지원 로컬 프로젝트 레지스트리."
+description: "Osori v1.5.0-rc1 — Local project registry & context loader with Telegram slash commands. Registry versioning + auto-migration + fingerprints view + root filters + root management + doctor health checks + safe root remove + GitHub count cache. Find, switch, list, add/remove projects, check status. Triggers: work on X, find project X, list projects, project status, project switch. | 오소리 — 텔레그램 슬래시 명령어 지원 로컬 프로젝트 레지스트리."
 ---
 
 # Osori (오소리)
@@ -88,7 +88,7 @@ help - Show help
 
 Override with the `OSORI_REGISTRY` environment variable.
 
-### Versioning & Migration (v1.4.0)
+### Versioning & Migration (v1.4.1)
 
 - Current schema: `osori.registry`
 - Current version: `2`
@@ -165,6 +165,13 @@ Show a one-shot project fingerprint view:
 bash skills/osori/scripts/project-fingerprints.sh [project-name]
 bash skills/osori/scripts/project-fingerprints.sh --root <root-key> [project-name]
 ```
+
+GitHub open-count cache (PR/Issue):
+- default cache file: `$HOME/.openclaw/osori-cache.json`
+- default TTL: `600` seconds
+- env overrides:
+  - `OSORI_CACHE_FILE`
+  - `OSORI_CACHE_TTL`
 
 ### Add
 ```bash
