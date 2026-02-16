@@ -110,9 +110,9 @@ projects = filter_projects(registry_projects(res.registry), root_key=root_filter
 
 if not projects:
     if root_filter:
-        print(f"❌ no projects found in root '{root_filter}'", file=sys.stderr)
+        print(f"❌ no projects found in root '{root_filter}'")
     else:
-        print("❌ no projects registered", file=sys.stderr)
+        print("❌ no projects registered")
     raise SystemExit(1)
 
 exact = [p for p in projects if str(p.get("name", "")).lower() == query]
@@ -120,13 +120,13 @@ candidates = exact if exact else [p for p in projects if query in str(p.get("nam
 
 if not candidates:
     suffix = f" in root '{root_filter}'" if root_filter else ""
-    print(f"❌ project '{os.environ['OSORI_QUERY']}' not found{suffix}", file=sys.stderr)
+    print(f"❌ project '{os.environ['OSORI_QUERY']}' not found{suffix}")
     raise SystemExit(1)
 
 if len(candidates) > 1:
-    print(f"❌ ambiguous project query '{os.environ['OSORI_QUERY']}'. matches:", file=sys.stderr)
+    print(f"❌ ambiguous project query '{os.environ['OSORI_QUERY']}'. matches:")
     for i, p in enumerate(candidates[:10], start=1):
-        print(f"  {i}. {p.get('name', '-')} [{p.get('root', 'default')}] | {p.get('path', '-')}", file=sys.stderr)
+        print(f"  {i}. {p.get('name', '-')} [{p.get('root', 'default')}] | {p.get('path', '-')}")
     raise SystemExit(1)
 
 target = candidates[0]
@@ -135,7 +135,7 @@ path = str(target.get("path", "")).strip()
 root = str(target.get("root", "default") or "default")
 
 if not name or not path:
-    print("❌ invalid project entry (missing name/path)", file=sys.stderr)
+    print("❌ invalid project entry (missing name/path)")
     raise SystemExit(1)
 
 print(f"{name}\t{path}\t{root}")

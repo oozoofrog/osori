@@ -45,9 +45,9 @@ for p in projects:
 
 if res.migrated:
     notes = "; ".join(res.migration_notes)
-    print(f"Migrated registry on load: {notes}", file=sys.stderr)
+    print(f"Migrated registry on load: {notes}")
     if res.backup_path:
-        print(f"Migration backup: {res.backup_path}", file=sys.stderr)
+        print(f"Migration backup: {res.backup_path}")
 PYEOF
 )
 
