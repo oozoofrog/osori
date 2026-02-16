@@ -25,6 +25,7 @@ show_help() {
 /find <name> [root|--root <root>] — Find a project path (optional root scope)
 /switch <name> [root|--root <root>] — Switch to project & load context (optional root scope)
 /fingerprints [name] [--root <root>] — Show repo/commit/PR/issue fingerprints
+/doctor [--fix] [--json] — Registry health check and safe auto-fix
 /list-roots — List roots, labels, paths, project counts
 /root-add <key> [label] — Add/update root
 /root-path-add <key> <path> — Add discovery path to root
@@ -41,6 +42,7 @@ show_help() {
 `/find agent-avengers work`
 `/switch Tesella --root personal`
 `/fingerprints Tesella --root personal`
+`/doctor --fix`
 `/list-roots`
 `/root-add work Work`
 `/root-path-add work /path/to/workspace`
@@ -508,6 +510,10 @@ cmd_scan() {
     fi
 }
 
+cmd_doctor() {
+    bash "$SCRIPT_DIR/doctor.sh" "$@"
+}
+
 cmd_list_roots() {
     bash "$SCRIPT_DIR/root-manager.sh" list
 }
@@ -561,6 +567,7 @@ case "$command" in
     find) cmd_find "$@" ;;
     switch) cmd_switch "$@" ;;
     fingerprints) cmd_fingerprints "$@" ;;
+    doctor) cmd_doctor "$@" ;;
     list-roots|roots) cmd_list_roots ;;
     root-add) cmd_root_add "$@" ;;
     root-path-add) cmd_root_path_add "$@" ;;

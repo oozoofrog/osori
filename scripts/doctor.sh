@@ -1,0 +1,339 @@
+#!/usr/bin/env bash
+# Registry health checker for Osori
+# Usage: doctor.sh [--fix] [--json]
+
+set -euo pipefail
+
+REGISTRY_FILE="${OSORI_REGISTRY:-$HOME/.openclaw/osori.json}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+DO_FIX="false"
+OUT_JSON="false"
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --fix)
+      DO_FIX="true"
+      shift
+      ;;
+    --json)
+      OUT_JSON="true"
+      shift
+      ;;
+    -h|--help|help)
+      cat << 'EOF'
+Usage:
+  doctor.sh [--fix] [--json]
+
+Options:
+  --fix   Apply safe automatic fixes (migration + exact duplicate removal)
+  --json  Print machine-readable JSON report
+EOF
+      exit 0
+      ;;
+    *)
+      echo "Unknown option: $1"
+      exit 1
+      ;;
+  esac
+done
+
+OSORI_SCRIPT_DIR="$SCRIPT_DIR" \
+OSORI_REG="$REGISTRY_FILE" \
+OSORI_DO_FIX="$DO_FIX" \
+OSORI_OUT_JSON="$OUT_JSON" \
+python3 << 'PYEOF'
+import json
+import os
+import re
+import sys
+from collections import defaultdict
+
+sys.path.insert(0, os.environ["OSORI_SCRIPT_DIR"])
+from registry_lib import (
+    REGISTRY_SCHEMA,
+    REGISTRY_VERSION,
+    load_registry,
+    registry_projects,
+    registry_roots,
+    save_registry,
+    set_registry_projects,
+)
+
+reg_path = os.environ["OSORI_REG"]
+do_fix = os.environ.get("OSORI_DO_FIX", "false").lower() == "true"
+out_json = os.environ.get("OSORI_OUT_JSON", "false").lower() == "true"
+
+findings = []
+
+
+def add(severity, code, message, suggestion=None, project=None):
+    row = {
+        "severity": severity,
+        "code": code,
+        "message": message,
+    }
+    if suggestion:
+        row["suggestion"] = suggestion
+    if project:
+        row["project"] = project
+    findings.append(row)
+
+
+def count_by_severity(rows):
+    c = {"error": 0, "warn": 0, "info": 0}
+    for r in rows:
+        sev = r.get("severity", "info")
+        if sev not in c:
+            c[sev] = 0
+        c[sev] += 1
+    return c
+
+
+def repo_valid(repo):
+    if repo == "":
+        return True
+    return re.match(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$", repo) is not None
+
+
+raw_payload = None
+raw_ok = False
+if os.path.exists(reg_path):
+    try:
+        with open(reg_path, encoding="utf-8") as f:
+            raw_payload = json.load(f)
+            raw_ok = True
+    except Exception as e:
+        add(
+            "error",
+            "registry.corrupted",
+            f"Registry JSON parse failed: {e}",
+            "Run with --fix to preserve broken file and reinitialize safely.",
+        )
+else:
+    add("warn", "registry.missing", f"Registry file not found: {reg_path}", "Run with --fix to initialize registry.")
+
+if raw_ok:
+    if isinstance(raw_payload, list):
+        add("warn", "registry.legacy_array", "Legacy array registry detected.", "Run with --fix to migrate to versioned schema.")
+        raw_projects = [p for p in raw_payload if isinstance(p, dict)]
+        raw_roots = [{"key": "default", "paths": []}]
+        schema = None
+        version = None
+    elif isinstance(raw_payload, dict):
+        schema = raw_payload.get("schema")
+        version = raw_payload.get("version")
+
+        if schema != REGISTRY_SCHEMA:
+            add(
+                "warn",
+                "registry.schema_mismatch",
+                f"schema={schema!r}, expected {REGISTRY_SCHEMA!r}",
+                "Run with --fix to normalize schema.",
+            )
+
+        try:
+            version_int = int(version)
+        except Exception:
+            version_int = None
+
+        if version_int != REGISTRY_VERSION:
+            add(
+                "warn",
+                "registry.version_mismatch",
+                f"version={version!r}, expected {REGISTRY_VERSION}",
+                "Run with --fix to migrate version.",
+            )
+
+        raw_projects = raw_payload.get("projects", [])
+        if not isinstance(raw_projects, list):
+            add(
+                "error",
+                "registry.projects_invalid_type",
+                f"projects field is {type(raw_projects).__name__}, expected list",
+                "Run with --fix to normalize projects container.",
+            )
+            raw_projects = []
+
+        raw_roots = raw_payload.get("roots", [])
+        if not isinstance(raw_roots, list):
+            add(
+                "warn",
+                "registry.roots_invalid_type",
+                f"roots field is {type(raw_roots).__name__}, expected list",
+                "Run with --fix to normalize roots container.",
+            )
+            raw_roots = []
+    else:
+        add(
+            "error",
+            "registry.invalid_top_level",
+            f"top-level JSON type is {type(raw_payload).__name__}, expected object/list",
+            "Run with --fix to reset registry format safely.",
+        )
+        raw_projects = []
+        raw_roots = []
+
+    # root key set for raw validation
+    root_keys = set()
+    for r in raw_roots:
+        if isinstance(r, dict):
+            key = str(r.get("key", "")).strip()
+            if key:
+                root_keys.add(key)
+
+    # raw project checks
+    name_map = defaultdict(list)
+    path_map = defaultdict(list)
+
+    for idx, p in enumerate(raw_projects):
+        if not isinstance(p, dict):
+            add("error", "project.invalid_item", f"projects[{idx}] is not an object", "Run with --fix to normalize registry entries.")
+            continue
+
+        name = str(p.get("name", "")).strip()
+        path = str(p.get("path", "")).strip()
+        root = str(p.get("root", "default") or "default").strip() or "default"
+        repo = str(p.get("repo", "") or "")
+
+        if not name or not path:
+            add(
+                "error",
+                "project.missing_required",
+                f"projects[{idx}] missing required fields name/path",
+                "Run with --fix to remove invalid project entries.",
+            )
+            continue
+
+        name_map[name].append(idx)
+        path_map[path].append(idx)
+
+        if root_keys and root not in root_keys:
+            add(
+                "warn",
+                "project.root_reference_missing",
+                f"project '{name}' references unknown root '{root}'",
+                "Run with --fix to add missing root metadata automatically.",
+                project=name,
+            )
+
+        if not repo_valid(repo):
+            add(
+                "warn",
+                "project.repo_invalid_format",
+                f"project '{name}' has invalid repo format: {repo!r}",
+                "Use owner/repo format (or leave empty).",
+                project=name,
+            )
+
+        if not os.path.exists(path):
+            add(
+                "error",
+                "project.path_missing",
+                f"project '{name}' path does not exist: {path}",
+                "Remove project or update to a valid path.",
+                project=name,
+            )
+
+    for n, idxs in name_map.items():
+        if len(idxs) > 1:
+            add(
+                "warn",
+                "project.duplicate_name",
+                f"duplicate project name '{n}' at indices {idxs}",
+                "Keep one canonical entry and remove duplicates.",
+                project=n,
+            )
+
+    for pth, idxs in path_map.items():
+        if len(idxs) > 1:
+            add(
+                "warn",
+                "project.duplicate_path",
+                f"duplicate project path '{pth}' at indices {idxs}",
+                "Keep one canonical entry and remove duplicates.",
+            )
+
+fix_applied = False
+fix_backup = None
+migration_backup = None
+migration_notes = []
+dedupe_removed = 0
+
+if do_fix:
+    loaded = load_registry(reg_path, auto_migrate=True, make_backup_on_migrate=True)
+    migration_notes = loaded.migration_notes if loaded.migrated else []
+    migration_backup = loaded.backup_path
+    registry = loaded.registry
+
+    # Safe fix: remove exact duplicate entries by (name, path)
+    projects = registry_projects(registry)
+    seen = set()
+    deduped = []
+    for p in projects:
+        key = (str(p.get("name", "")).strip(), str(p.get("path", "")).strip())
+        if key in seen:
+            dedupe_removed += 1
+            continue
+        seen.add(key)
+        deduped.append(p)
+
+    if dedupe_removed > 0:
+        set_registry_projects(registry, deduped)
+        fix_backup = save_registry(reg_path, registry, make_backup=True)
+
+    fix_applied = True
+
+    if migration_notes:
+        add("info", "fix.migration_applied", f"migration applied: {'; '.join(migration_notes)}")
+    if migration_backup:
+        add("info", "fix.migration_backup", f"migration backup: {migration_backup}")
+    if dedupe_removed > 0:
+        add("info", "fix.dedupe_applied", f"removed exact duplicate entries: {dedupe_removed}")
+        if fix_backup:
+            add("info", "fix.backup_created", f"backup created: {fix_backup}")
+    if not migration_notes and dedupe_removed == 0:
+        add("info", "fix.noop", "no safe fix changes were required")
+
+counts = count_by_severity(findings)
+status = "ok" if counts.get("error", 0) == 0 and counts.get("warn", 0) == 0 else "issues"
+
+report = {
+    "status": status,
+    "registry": reg_path,
+    "counts": counts,
+    "findings": findings,
+    "fix": {
+        "requested": do_fix,
+        "applied": fix_applied,
+        "migrationNotes": migration_notes,
+        "migrationBackup": migration_backup,
+        "dedupeRemoved": dedupe_removed,
+        "backup": fix_backup,
+    },
+}
+
+if out_json:
+    print(json.dumps(report, ensure_ascii=False, indent=2))
+    raise SystemExit(0)
+
+print("🩺 Osori Doctor")
+print(f"Registry: {reg_path}")
+print(f"Counts: ERROR={counts.get('error', 0)} WARN={counts.get('warn', 0)} INFO={counts.get('info', 0)}")
+print()
+
+if not findings:
+    print("✅ No issues found.")
+else:
+    order = {"error": 0, "warn": 1, "info": 2}
+    for row in sorted(findings, key=lambda r: (order.get(r.get("severity", "info"), 9), r.get("code", ""))):
+        sev = row["severity"].upper()
+        print(f"[{sev}] {row['code']}: {row['message']}")
+        if row.get("project"):
+            print(f"  ↳ project: {row['project']}")
+        if row.get("suggestion"):
+            print(f"  ↳ fix: {row['suggestion']}")
+
+if do_fix:
+    print()
+    print("🔧 Fix mode executed.")
+PYEOF

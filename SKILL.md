@@ -1,6 +1,6 @@
 ---
 name: osori
-description: "Osori v1.4.0 — Local project registry & context loader with Telegram slash commands. Registry versioning + auto-migration + fingerprints view + root filters + root management commands. Find, switch, list, add/remove projects, check status. Triggers: work on X, find project X, list projects, project status, project switch. | 오소리 — 텔레그램 슬래시 명령어 지원 로컬 프로젝트 레지스트리."
+description: "Osori v1.5.0-rc1 — Local project registry & context loader with Telegram slash commands. Registry versioning + auto-migration + fingerprints view + root filters + root management + doctor health checks. Find, switch, list, add/remove projects, check status. Triggers: work on X, find project X, list projects, project status, project switch. | 오소리 — 텔레그램 슬래시 명령어 지원 로컬 프로젝트 레지스트리."
 ---
 
 # Osori (오소리)
@@ -17,7 +17,7 @@ Local project registry & context loader for AI agents.
 - **python3** — Required. Used for JSON processing.
 - **git** — Project detection and status checks.
 
-## Telegram Bot Commands (Updated in v1.4.0)
+## Telegram Bot Commands (Updated in v1.5.0-rc1)
 
 Osori now supports Telegram slash commands for quick project management:
 
@@ -27,6 +27,7 @@ Osori now supports Telegram slash commands for quick project management:
 /find <name> [root|--root <root>] — Find a project by name (optional root scope)
 /switch <name> [root|--root <root>] — Switch to project and load context (optional root scope)
 /fingerprints [name] [--root <root>] — Show repo remote + last commit + open PR/issue counts
+/doctor [--fix] [--json] — Registry health check and safe auto-fix
 /list-roots — List roots, labels, paths, and project counts
 /root-add <key> [label] — Add root (or update label)
 /root-path-add <key> <path> — Add discovery path to root
@@ -49,6 +50,7 @@ status - Check project statuses (or by root)
 find - Find project by name
 switch - Switch to project
 fingerprints - Show repo/commit/PR/issue fingerprint
+doctor - Health check + safe auto-fix
 list-roots - Show roots and discovery paths
 root-add - Add root
 root-path-add - Add path to root
@@ -68,6 +70,7 @@ help - Show help
 /find agent-avengers work
 /switch Tesella --root personal
 /fingerprints Tesella --root personal
+/doctor --fix
 /list-roots
 /root-add work Work
 /root-path-add work /path/to/workspace
@@ -175,6 +178,21 @@ Telegram root filter:
 
 ```bash
 /status [root]
+```
+
+### Doctor
+Registry health check and optional safe fix.
+
+```bash
+/doctor
+/doctor --fix
+/doctor --json
+```
+
+Shell equivalent:
+
+```bash
+bash skills/osori/scripts/doctor.sh [--fix] [--json]
 ```
 
 ### Root Management
