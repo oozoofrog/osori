@@ -25,7 +25,7 @@ show_help() {
 /find <name> [root|--root <root>] — Find a project path (optional root scope)
 /switch <name> [root|--root <root>] [--index <n>] — Switch to project & load context (multi-match selection)
 /fingerprints [name] [--root <root>] — Show repo/commit/PR/issue fingerprints
-/doctor [--fix] [--json] — Registry health check and safe auto-fix
+/doctor [--fix] [--dry-run] [--yes] [--json] — Registry health check (preview-first)
 /list-roots — List roots, labels, paths, project counts
 /root-add <key> [label] — Add/update root
 /root-path-add <key> <path> — Add discovery path to root

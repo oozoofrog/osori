@@ -29,7 +29,7 @@ Osori now supports Telegram slash commands for quick project management:
 /find <name> [root|--root <root>] — Find a project by name (optional root scope)
 /switch <name> [root|--root <root>] [--index <n>] — Switch to project and load context (multi-match selection)
 /fingerprints [name] [--root <root>] — Show repo remote + last commit + open PR/issue counts
-/doctor [--fix] [--json] — Registry health check and safe auto-fix
+/doctor [--fix] [--dry-run] [--yes] [--json] — Registry health check (preview-first, risk-gated)
 /list-roots — List roots, labels, paths, and project counts
 /root-add <key> [label] — Add root (or update label)
 /root-path-add <key> <path> — Add discovery path to root
@@ -61,7 +61,7 @@ status - Check project statuses (or by root)
 find - Find project by name
 switch - Switch to project
 fingerprints - Show repo/commit/PR/issue fingerprint
-doctor - Health check + safe auto-fix
+doctor - Health check (preview-first, risk-gated fix)
 list-roots - Show roots and discovery paths
 root-add - Add root
 root-path-add - Add path to root
@@ -232,19 +232,30 @@ Telegram root filter:
 ```
 
 ### Doctor
-Registry health check and optional safe fix.
+Registry health check with preview-first pipeline and risk-gated fixes.
+
+**Default** (no flags): analyze + preview plan — no changes applied.
 
 ```bash
-/doctor
-/doctor --fix
-/doctor --json
+/doctor                     # preview only (default)
+/doctor --fix               # preview + apply (high-risk blocked)
+/doctor --fix --yes         # preview + apply all (including high-risk)
+/doctor --dry-run           # explicit preview only (never applies)
+/doctor --json              # machine-readable JSON output
 ```
+
+Risk levels:
+- 🟢 **low** — schema normalization, migration, missing fields
+- 🟡 **medium** — duplicate removal, root reference repair
+- 🔴 **high** — registry re-initialization from corrupted state
 
 Shell equivalent:
 
 ```bash
-bash skills/osori/scripts/doctor.sh [--fix] [--json]
+bash skills/osori/scripts/doctor.sh [--fix] [--dry-run] [--yes] [--json]
 ```
+
+See also: [Doctor Safe Fix Guide](docs/examples/doctor-safe-fix.md)
 
 ### Root Management
 
