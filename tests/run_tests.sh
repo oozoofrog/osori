@@ -308,6 +308,97 @@ assert_contains "telegram doctor returns json" "$doctor_out" '"status"'
 teardown_test
 
 echo ""
+echo "=== test_doctor_preview_first_default ==="
+setup_test
+cat > "$TEST_TMP/osori.json" << 'JSONEOF'
+[
+  {"name": "prev-proj", "path": "/tmp/prev", "repo": "", "lang": "unknown", "tags": [], "description": "", "addedAt": "2026-02-16"}
+]
+JSONEOF
+out=$(bash "$PROJECT_ROOT/scripts/doctor.sh" 2>&1)
+assert_contains "doctor default shows preview" "$out" "Preview only"
+assert_contains "doctor default shows plan" "$out" "Fix Plan"
+# Verify no changes were applied (file should still be legacy array)
+first_char=$(head -c1 "$TEST_TMP/osori.json")
+assert_eq "doctor default did not modify file" "[" "$first_char"
+teardown_test
+
+echo ""
+echo "=== test_doctor_dry_run_never_applies ==="
+setup_test
+cat > "$TEST_TMP/osori.json" << 'JSONEOF'
+[
+  {"name": "dry-proj", "path": "/tmp/dry", "repo": "", "lang": "unknown", "tags": [], "description": "", "addedAt": "2026-02-16"}
+]
+JSONEOF
+out=$(bash "$PROJECT_ROOT/scripts/doctor.sh" --dry-run 2>&1)
+assert_contains "doctor dry-run message" "$out" "Dry-run mode"
+assert_contains "doctor dry-run shows plan" "$out" "Fix Plan"
+first_char=$(head -c1 "$TEST_TMP/osori.json")
+assert_eq "doctor dry-run did not modify file" "[" "$first_char"
+teardown_test
+
+echo ""
+echo "=== test_doctor_dry_run_overrides_fix ==="
+setup_test
+cat > "$TEST_TMP/osori.json" << 'JSONEOF'
+[
+  {"name": "override-proj", "path": "/tmp/override", "repo": "", "lang": "unknown", "tags": [], "description": "", "addedAt": "2026-02-16"}
+]
+JSONEOF
+out=$(bash "$PROJECT_ROOT/scripts/doctor.sh" --fix --dry-run 2>&1)
+assert_contains "doctor dry-run overrides fix" "$out" "Dry-run mode"
+first_char=$(head -c1 "$TEST_TMP/osori.json")
+assert_eq "doctor dry-run+fix did not modify file" "[" "$first_char"
+teardown_test
+
+echo ""
+echo "=== test_doctor_fix_applies_changes ==="
+setup_test
+cat > "$TEST_TMP/osori.json" << 'JSONEOF'
+[
+  {"name": "fix-proj", "path": "/tmp/fix-proj", "repo": "", "lang": "unknown", "tags": [], "description": "", "addedAt": "2026-02-16"}
+]
+JSONEOF
+out=$(bash "$PROJECT_ROOT/scripts/doctor.sh" --fix 2>&1)
+assert_contains "doctor fix applied" "$out" "Fix applied"
+content=$(cat "$TEST_TMP/osori.json")
+assert_contains "doctor fix migrated" "$content" '"schema": "osori.registry"'
+teardown_test
+
+echo ""
+echo "=== test_doctor_json_has_plan_and_risk ==="
+setup_test
+cat > "$TEST_TMP/osori.json" << 'JSONEOF'
+[
+  {"name": "json-proj", "path": "/tmp/json-proj", "repo": "", "lang": "unknown", "tags": [], "description": "", "addedAt": "2026-02-16"}
+]
+JSONEOF
+out_json=$(bash "$PROJECT_ROOT/scripts/doctor.sh" --json 2>&1)
+assert_contains "doctor json has plan" "$out_json" '"plan"'
+assert_contains "doctor json has riskSummary" "$out_json" '"riskSummary"'
+assert_contains "doctor json has dryRun" "$out_json" '"dryRun"'
+teardown_test
+
+echo ""
+echo "=== test_doctor_risk_levels_in_plan ==="
+setup_test
+printf '{ broken json' > "$TEST_TMP/osori.json"
+out_json=$(bash "$PROJECT_ROOT/scripts/doctor.sh" --json 2>&1)
+# Corrupted registry should produce high risk plan
+assert_contains "doctor corrupted has high risk" "$out_json" '"high"'
+assert_contains "doctor plan has reinitialize" "$out_json" '"reinitialize"'
+teardown_test
+
+echo ""
+echo "=== test_doctor_high_risk_blocked_without_yes ==="
+setup_test
+printf '{ broken json' > "$TEST_TMP/osori.json"
+out=$(bash "$PROJECT_ROOT/scripts/doctor.sh" --fix 2>&1)
+assert_contains "doctor high risk blocked" "$out" "blocked"
+teardown_test
+
+echo ""
 echo "=== test_fingerprints_view ==="
 setup_test
 git -C "$TEST_TMP/fake-project" remote add origin "https://github.com/example/osori-test.git"
