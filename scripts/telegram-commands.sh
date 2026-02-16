@@ -31,6 +31,7 @@ show_help() {
 /root-path-add <key> <path> — Add discovery path to root
 /root-path-remove <key> <path> — Remove discovery path from root
 /root-set-label <key> <label> — Update root label
+/root-remove <key> [--reassign <target>] [--force] — Safely remove root
 /add <path> — Add project to registry
 /remove <name> — Remove project from registry
 /scan <path> [root] — Scan directory for projects (optional root key)
@@ -46,6 +47,7 @@ show_help() {
 `/list-roots`
 `/root-add work Work`
 `/root-path-add work /path/to/workspace`
+`/root-remove work --reassign default`
 `/scan /path/to/workspace work`
 EOF
 }
@@ -555,6 +557,15 @@ cmd_root_set_label() {
     bash "$SCRIPT_DIR/root-manager.sh" set-label "$key" "$label"
 }
 
+cmd_root_remove() {
+    local key="${1:-}"
+    shift || true
+
+    [[ -z "$key" ]] && { echo "❌ Usage: /root-remove <key> [--reassign <target>] [--force]"; exit 1; }
+
+    bash "$SCRIPT_DIR/root-manager.sh" remove "$key" "$@"
+}
+
 # Main dispatch
 command="${1:-help}"
 if [[ $# -gt 0 ]]; then
@@ -573,6 +584,7 @@ case "$command" in
     root-path-add) cmd_root_path_add "$@" ;;
     root-path-remove) cmd_root_path_remove "$@" ;;
     root-set-label) cmd_root_set_label "$@" ;;
+    root-remove) cmd_root_remove "$@" ;;
     add) cmd_add "${1:-}" ;;
     remove) cmd_remove "${1:-}" ;;
     scan) cmd_scan "${1:-}" "${2:-}" ;;

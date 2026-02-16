@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
-# Manage registry roots (list/add/path-add/path-remove/set-label)
+# Manage registry roots (list/add/path-add/path-remove/set-label/remove)
 # Usage:
 #   root-manager.sh list
 #   root-manager.sh add <root-key> [label]
 #   root-manager.sh path-add <root-key> <path>
 #   root-manager.sh path-remove <root-key> <path>
 #   root-manager.sh set-label <root-key> <label>
+#   root-manager.sh remove <root-key> [--reassign <target-root>] [--force]
 
 set -euo pipefail
 
@@ -25,6 +26,7 @@ Usage:
   root-manager.sh path-add <root-key> <path>
   root-manager.sh path-remove <root-key> <path>
   root-manager.sh set-label <root-key> <label>
+  root-manager.sh remove <root-key> [--reassign <target-root>] [--force]
 EOF
 }
 
@@ -250,6 +252,110 @@ for r in roots:
 
 print(f"❌ root not found: {key}")
 raise SystemExit(1)
+PYEOF
+    ;;
+
+  remove)
+    ROOT_KEY="${1:-}"
+    shift || true
+    REASSIGN_TARGET=""
+    FORCE="false"
+
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        --reassign)
+          REASSIGN_TARGET="${2:-}"
+          shift 2
+          ;;
+        --force)
+          FORCE="true"
+          shift
+          ;;
+        *)
+          shift
+          ;;
+      esac
+    done
+
+    [[ -z "$ROOT_KEY" ]] && { usage; exit 1; }
+
+    OSORI_SCRIPT_DIR="$SCRIPT_DIR" \
+    OSORI_REG="$REGISTRY_FILE" \
+    OSORI_ROOT_KEY="$ROOT_KEY" \
+    OSORI_REASSIGN_TARGET="$REASSIGN_TARGET" \
+    OSORI_FORCE="$FORCE" \
+    python3 << 'PYEOF'
+import os
+import re
+import sys
+
+sys.path.insert(0, os.environ["OSORI_SCRIPT_DIR"])
+from registry_lib import load_registry, registry_projects, registry_roots, save_registry, set_registry_projects
+
+root_key = os.environ["OSORI_ROOT_KEY"].strip()
+reassign = os.environ.get("OSORI_REASSIGN_TARGET", "").strip()
+force = os.environ.get("OSORI_FORCE", "false").lower() == "true"
+
+if not re.match(r"^[A-Za-z0-9_-]+$", root_key):
+    print("❌ root key must match [A-Za-z0-9_-]+")
+    raise SystemExit(1)
+
+if root_key == "default":
+    print("❌ cannot remove protected root: default")
+    raise SystemExit(1)
+
+if reassign and reassign == root_key:
+    print("❌ --reassign target must be different from removed root")
+    raise SystemExit(1)
+
+res = load_registry(os.environ["OSORI_REG"], auto_migrate=True, make_backup_on_migrate=True)
+registry = res.registry
+roots = registry_roots(registry)
+projects = registry_projects(registry)
+
+root_keys = [r.get("key", "default") for r in roots]
+if root_key not in root_keys:
+    print(f"❌ root not found: {root_key}")
+    raise SystemExit(1)
+
+affected = [p for p in projects if str(p.get("root", "default") or "default") == root_key]
+affected_count = len(affected)
+
+if affected_count > 0 and not reassign and not force:
+    print(f"❌ root '{root_key}' has {affected_count} project(s); use --reassign <target-root> or --force")
+    raise SystemExit(1)
+
+target_root = None
+if reassign:
+    if reassign == "default":
+        target_root = "default"
+    else:
+        if reassign not in root_keys:
+            print(f"❌ reassign target root not found: {reassign}")
+            raise SystemExit(1)
+        target_root = reassign
+elif force and affected_count > 0:
+    target_root = "default"
+
+if target_root:
+    for p in projects:
+        if str(p.get("root", "default") or "default") == root_key:
+            p["root"] = target_root
+
+new_roots = [r for r in roots if r.get("key") != root_key]
+registry["roots"] = new_roots
+set_registry_projects(registry, projects)
+backup_path = save_registry(os.environ["OSORI_REG"], registry, make_backup=True)
+
+if target_root:
+    if force and not reassign:
+        print(f"⚠️ force mode: reassigned {affected_count} project(s) to 'default' before removing '{root_key}'")
+    else:
+        print(f"✅ reassigned {affected_count} project(s) from '{root_key}' to '{target_root}'")
+
+print(f"✅ removed root: {root_key}")
+if backup_path:
+    print(f"Backup: {backup_path}")
 PYEOF
     ;;
 
