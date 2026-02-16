@@ -637,8 +637,26 @@ PYSCRIPT
 }
 
 cmd_scan() {
-    local path="${1:-}"
-    local root_key="${2:-}"
+    local path=""
+    local root_key=""
+    local depth="2"
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --depth)
+                depth="${2:-2}"
+                shift 2
+                ;;
+            *)
+                if [[ -z "$path" ]]; then
+                    path="$1"
+                elif [[ -z "$root_key" ]]; then
+                    root_key="$1"
+                fi
+                shift
+                ;;
+        esac
+    done
 
     local default_scan_root="${OSORI_SCAN_DEFAULT:-${OSORI_SEARCH_PATHS%%:*}}"
     if [[ -z "$path" ]]; then
@@ -648,11 +666,11 @@ cmd_scan() {
     [[ ! -d "$path" ]] && { echo "❌ Directory not found: $path"; exit 1; }
 
     if [[ -n "$root_key" ]]; then
-      echo "🔍 *Scanning for git repositories...* (root=$root_key)"
-      OSORI_ROOT_KEY="$root_key" bash "$SCRIPT_DIR/scan-projects.sh" "$path" --depth 2
+      echo "🔍 *Scanning for git repositories...* (root=$root_key, depth=$depth)"
+      OSORI_ROOT_KEY="$root_key" bash "$SCRIPT_DIR/scan-projects.sh" "$path" --depth "$depth"
     else
-      echo "🔍 *Scanning for git repositories...*"
-      bash "$SCRIPT_DIR/scan-projects.sh" "$path" --depth 2
+      echo "🔍 *Scanning for git repositories...* (depth=$depth)"
+      bash "$SCRIPT_DIR/scan-projects.sh" "$path" --depth "$depth"
     fi
 }
 
@@ -783,7 +801,7 @@ case "$command" in
     entire-rewind-list) cmd_entire_rewind_list "$@" ;;
     add) cmd_add "${1:-}" ;;
     remove) cmd_remove "${1:-}" ;;
-    scan) cmd_scan "${1:-}" "${2:-}" ;;
+    scan) cmd_scan "$@" ;;
     help|--help|-h) show_help ;;
     *) echo "❌ Unknown command: $command"; show_help; exit 1 ;;
 esac
