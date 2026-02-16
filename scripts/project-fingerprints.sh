@@ -1,0 +1,109 @@
+#!/usr/bin/env bash
+# Show project fingerprints (repo/commit/PR/issue) from osori registry
+# Usage: project-fingerprints.sh [name]
+
+set -euo pipefail
+
+QUERY="${1:-}"
+REGISTRY_FILE="${OSORI_REGISTRY:-$HOME/.openclaw/osori.json}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+OSORI_SCRIPT_DIR="$SCRIPT_DIR" \
+OSORI_REG="$REGISTRY_FILE" \
+OSORI_QUERY="$QUERY" \
+python3 << 'PYEOF'
+import json
+import os
+import shutil
+import subprocess
+import sys
+from typing import Dict, List
+
+sys.path.insert(0, os.environ["OSORI_SCRIPT_DIR"])
+from registry_lib import load_registry, parse_repo_from_remote, registry_projects
+
+
+def run(cmd: List[str], timeout: int = 8):
+    try:
+        p = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+        return p.returncode, p.stdout.strip(), p.stderr.strip()
+    except Exception as e:
+        return 1, "", str(e)
+
+
+def gh_count(kind: str, repo: str):
+    if not repo or shutil.which("gh") is None:
+        return "n/a"
+
+    cmd = ["gh", kind, "list", "-R", repo, "--state", "open", "--json", "number", "--limit", "200"]
+    rc, out, _ = run(cmd, timeout=12)
+    if rc != 0 or not out:
+        return "n/a"
+
+    try:
+        return str(len(json.loads(out)))
+    except Exception:
+        return "n/a"
+
+
+query = os.environ.get("OSORI_QUERY", "").strip().lower()
+reg_file = os.environ["OSORI_REG"]
+
+loaded = load_registry(reg_file, auto_migrate=True, make_backup_on_migrate=True)
+projects = registry_projects(loaded.registry)
+
+if query:
+    projects = [p for p in projects if query in p.get("name", "").lower()]
+
+if not projects:
+    print("📂 No matching projects.")
+    raise SystemExit(0)
+
+if loaded.migrated:
+    notes = "; ".join(loaded.migration_notes)
+    print(f"ℹ️ Registry migrated: {notes}")
+    if loaded.backup_path:
+        print(f"ℹ️ Migration backup: {loaded.backup_path}")
+    print()
+
+print(f"🧬 Project fingerprints ({len(projects)})\n")
+
+for p in projects:
+    name = p.get("name", "-")
+    path = p.get("path", "")
+    root = p.get("root", "default")
+
+    print(f"• {name} [{root}]")
+
+    if not path or not os.path.exists(path):
+        print(f"  - path: {path or '-'}")
+        print("  - remote: n/a")
+        print("  - last commit: n/a")
+        print("  - open PRs: n/a")
+        print("  - open issues: n/a")
+        print()
+        continue
+
+    rc, remote, _ = run(["git", "-C", path, "remote", "get-url", "origin"])
+    if rc != 0:
+        remote = ""
+
+    repo = p.get("repo", "") or parse_repo_from_remote(remote)
+
+    rc, last, _ = run(["git", "-C", path, "log", "-1", "--format=%H|%cI"])
+    if rc == 0 and "|" in last:
+        commit_hash, commit_date = last.split("|", 1)
+        commit_str = f"{commit_hash} ({commit_date})"
+    else:
+        commit_str = "n/a"
+
+    pr_count = gh_count("pr", repo)
+    issue_count = gh_count("issue", repo)
+
+    print(f"  - path: {path}")
+    print(f"  - remote: {remote or 'n/a'}")
+    print(f"  - last commit: {commit_str}")
+    print(f"  - open PRs: {pr_count}")
+    print(f"  - open issues: {issue_count}")
+    print()
+PYEOF

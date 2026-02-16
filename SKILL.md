@@ -1,6 +1,6 @@
 ---
 name: osori
-description: "Osori v1.2.0 — Local project registry & context loader with Telegram slash commands. Find, switch, list, add/remove projects, check status. Triggers: work on X, find project X, list projects, project status, project switch. | 오소리 — 텔레그램 슬래시 명령어 지원 로컬 프로젝트 레지스트리."
+description: "Osori v1.3.0 — Local project registry & context loader with Telegram slash commands. Registry versioning + auto-migration + fingerprints view. Find, switch, list, add/remove projects, check status. Triggers: work on X, find project X, list projects, project status, project switch. | 오소리 — 텔레그램 슬래시 명령어 지원 로컬 프로젝트 레지스트리."
 ---
 
 # Osori (오소리)
@@ -26,6 +26,7 @@ Osori now supports Telegram slash commands for quick project management:
 /status — Check status of all projects
 /find <name> — Find a project by name
 /switch <name> — Switch to project and load context
+/fingerprints [name] — Show repo remote + last commit + open PR/issue counts
 /add <path> — Add project to registry
 /remove <name> — Remove project from registry
 /scan <path> — Scan directory for git projects
@@ -53,8 +54,9 @@ help - Show help
 ```
 /find agent-avengers
 /switch Tesella
+/fingerprints Tesella
 /add /Volumes/disk/MyProject
-/scan /Volumes/eyedisk/develop
+/scan /path/to/workspace
 ```
 
 ## Registry
@@ -62,6 +64,18 @@ help - Show help
 `${OSORI_REGISTRY:-$HOME/.openclaw/osori.json}`
 
 Override with the `OSORI_REGISTRY` environment variable.
+
+### Versioning & Migration (v1.3.0)
+
+- Current schema: `osori.registry`
+- Current version: `2`
+- On every load, Osori auto-migrates older registry formats:
+  - legacy array (`[]`) → versioned object
+  - object without `schema/version` → normalized versioned object
+- Migration safety:
+  - creates backup: `osori.json.bak-<timestamp>`
+  - corrupted JSON is preserved as: `osori.json.broken-<timestamp>`
+  - write path uses atomic replace + rollback fallback
 
 ## Finding Projects (when path is unknown)
 
@@ -92,6 +106,17 @@ Read osori.json and display as a table.
    - `gh issue list -R <repo> --limit 5` (when repo is set)
 4. Present summary
 
+### Fingerprints
+Show a one-shot project fingerprint view:
+- repo remote URL
+- last commit hash/date
+- open PR count
+- open issue count
+
+```bash
+bash skills/osori/scripts/project-fingerprints.sh [project-name]
+```
+
 ### Add
 ```bash
 bash skills/osori/scripts/add-project.sh <path> [--tag <tag>] [--name <name>]
@@ -114,13 +139,28 @@ Run `git status` + `gh issue list` for one or all projects.
 
 ```json
 {
-  "name": "string",
-  "path": "/absolute/path",
-  "repo": "owner/repo",
-  "lang": "swift|typescript|python|rust|go|ruby|unknown",
-  "tags": ["personal", "ios"],
-  "description": "Short description",
-  "addedAt": "YYYY-MM-DD"
+  "schema": "osori.registry",
+  "version": 2,
+  "updatedAt": "2026-02-16T00:00:00Z",
+  "roots": [
+    {
+      "key": "default",
+      "label": "Default",
+      "paths": []
+    }
+  ],
+  "projects": [
+    {
+      "name": "string",
+      "path": "/absolute/path",
+      "repo": "owner/repo",
+      "lang": "swift|typescript|python|rust|go|ruby|unknown",
+      "tags": ["personal", "ios"],
+      "description": "Short description",
+      "addedAt": "YYYY-MM-DD",
+      "root": "default"
+    }
+  ]
 }
 ```
 

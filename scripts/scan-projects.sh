@@ -10,35 +10,46 @@ DEPTH=3
 shift || true
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --depth) DEPTH="$2"; shift 2 ;;
+    --depth) DEPTH="${2:-3}"; shift 2 ;;
     *) shift ;;
   esac
 done
 
-REGISTRY_FILE="${OSORI_REGISTRY:-$HOME/.openclaw/osori.json}"
-
-# Ensure parent directory exists
-mkdir -p "$(dirname "$REGISTRY_FILE")"
-
-# Init registry if missing
-if [[ ! -f "$REGISTRY_FILE" ]]; then
-  echo "[]" > "$REGISTRY_FILE"
+if [[ ! -d "$ROOT" ]]; then
+  echo "Directory not found: $ROOT"
+  exit 1
 fi
 
-# Collect entries as a temp JSON file
+REGISTRY_FILE="${OSORI_REGISTRY:-$HOME/.openclaw/osori.json}"
+ROOT_KEY="${OSORI_ROOT_KEY:-default}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 TMPFILE="$(mktemp)"
 echo "[]" > "$TMPFILE"
 trap 'rm -f "$TMPFILE"' EXIT
 
-# Load existing names
-EXISTING_NAMES=$(OSORI_REG="$REGISTRY_FILE" python3 << 'PYEOF'
-import json, os
-with open(os.environ["OSORI_REG"]) as f:
-    data = json.load(f)
-for p in data:
-    print(p["name"])
+# Load existing names (with auto-migration)
+EXISTING_NAMES=$(OSORI_SCRIPT_DIR="$SCRIPT_DIR" OSORI_REG="$REGISTRY_FILE" python3 << 'PYEOF'
+import os
+import sys
+
+sys.path.insert(0, os.environ["OSORI_SCRIPT_DIR"])
+from registry_lib import load_registry, registry_projects
+
+res = load_registry(os.environ["OSORI_REG"], auto_migrate=True, make_backup_on_migrate=True)
+projects = registry_projects(res.registry)
+for p in projects:
+    name = p.get("name", "")
+    if name:
+        print(name)
+
+if res.migrated:
+    notes = "; ".join(res.migration_notes)
+    print(f"Migrated registry on load: {notes}", file=sys.stderr)
+    if res.backup_path:
+        print(f"Migration backup: {res.backup_path}", file=sys.stderr)
 PYEOF
-) || true
+)
 
 while IFS= read -r gitdir; do
   dir="$(dirname "$gitdir")"
@@ -49,11 +60,16 @@ while IFS= read -r gitdir; do
     continue
   fi
 
-  # Detect remote
-  repo=""
+  # Detect remote/repo
   remote=$(git -C "$dir" remote get-url origin 2>/dev/null || true)
-  if [[ "$remote" =~ github\.com[:/]([^/]+/[^/.]+) ]]; then
-    repo="${BASH_REMATCH[1]}"
+  repo=""
+  if [[ -n "$remote" ]]; then
+    repo=$(OSORI_REMOTE="$remote" PYTHONPATH="$SCRIPT_DIR" python3 - << 'PYEOF'
+import os
+from registry_lib import parse_repo_from_remote
+print(parse_repo_from_remote(os.environ.get("OSORI_REMOTE", "")))
+PYEOF
+)
   fi
 
   # Detect language
@@ -72,11 +88,9 @@ while IFS= read -r gitdir; do
     desc=$(python3 -c "import json,sys; print(json.load(sys.stdin).get('description',''))" < "$dir/package.json" 2>/dev/null || true)
   fi
 
-  # Detect tag from parent dir
   parent="$(basename "$(dirname "$dir")")"
   today=$(date +%Y-%m-%d)
 
-  # Append entry to tmpfile via env vars
   OSORI_TMPFILE="$TMPFILE" \
   OSORI_NAME="$name" \
   OSORI_PATH="$dir" \
@@ -85,11 +99,13 @@ while IFS= read -r gitdir; do
   OSORI_TAG="$parent" \
   OSORI_DESC="$desc" \
   OSORI_TODAY="$today" \
+  OSORI_ROOT_KEY="$ROOT_KEY" \
   python3 << 'PYEOF'
-import json, os
+import json
+import os
 
-tmpfile = os.environ["OSORI_TMPFILE"]
-with open(tmpfile) as f:
+path = os.environ["OSORI_TMPFILE"]
+with open(path, encoding="utf-8") as f:
     entries = json.load(f)
 
 entries.append({
@@ -97,33 +113,58 @@ entries.append({
     "path": os.environ["OSORI_PATH"],
     "repo": os.environ["OSORI_REPO"],
     "lang": os.environ["OSORI_LANG"],
-    "tags": [os.environ["OSORI_TAG"]],
+    "tags": [os.environ["OSORI_TAG"]] if os.environ.get("OSORI_TAG") else [],
     "description": os.environ["OSORI_DESC"],
-    "addedAt": os.environ["OSORI_TODAY"]
+    "addedAt": os.environ["OSORI_TODAY"],
+    "root": os.environ.get("OSORI_ROOT_KEY", "default") or "default",
 })
 
-with open(tmpfile, "w") as f:
-    json.dump(entries, f)
+with open(path, "w", encoding="utf-8") as f:
+    json.dump(entries, f, ensure_ascii=False)
 PYEOF
 
 done < <(find "$ROOT" -maxdepth "$DEPTH" -name '.git' -type d 2>/dev/null)
 
 # Merge with existing registry
+OSORI_SCRIPT_DIR="$SCRIPT_DIR" \
 OSORI_REG="$REGISTRY_FILE" \
 OSORI_TMPFILE="$TMPFILE" \
 python3 << 'PYEOF'
-import json, os
+import json
+import os
+import sys
+
+sys.path.insert(0, os.environ["OSORI_SCRIPT_DIR"])
+from registry_lib import load_registry, registry_projects, save_registry, set_registry_projects
 
 reg_file = os.environ["OSORI_REG"]
-tmpfile = os.environ["OSORI_TMPFILE"]
-
-with open(reg_file) as f:
-    existing = json.load(f)
-with open(tmpfile) as f:
+with open(os.environ["OSORI_TMPFILE"], encoding="utf-8") as f:
     new_entries = json.load(f)
 
-existing.extend(new_entries)
-with open(reg_file, "w") as f:
-    json.dump(existing, f, indent=2, ensure_ascii=False)
-print(f"Added {len(new_entries)} projects. Total: {len(existing)}")
+loaded = load_registry(reg_file, auto_migrate=True, make_backup_on_migrate=True)
+registry = loaded.registry
+projects = registry_projects(registry)
+existing_names = {p.get("name") for p in projects}
+
+added = 0
+for e in new_entries:
+    if e.get("name") in existing_names:
+        continue
+    projects.append(e)
+    existing_names.add(e.get("name"))
+    added += 1
+
+set_registry_projects(registry, projects)
+backup_path = save_registry(reg_file, registry, make_backup=True)
+
+if loaded.migrated:
+    notes = "; ".join(loaded.migration_notes)
+    print(f"Migrated registry on load: {notes}")
+    if loaded.backup_path:
+        print(f"Migration backup: {loaded.backup_path}")
+
+if backup_path:
+    print(f"Backup: {backup_path}")
+
+print(f"Added {added} projects. Total: {len(projects)}")
 PYEOF

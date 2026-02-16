@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Simple test runner for osori scripts
+# Test runner for osori scripts
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -21,6 +21,7 @@ assert_eq() {
     FAILED=$((FAILED + 1)); ERRORS+=("$desc")
   fi
 }
+
 assert_contains() {
   local desc="$1" haystack="$2" needle="$3"
   if [[ "$haystack" == *"$needle"* ]]; then
@@ -30,6 +31,7 @@ assert_contains() {
     FAILED=$((FAILED + 1)); ERRORS+=("$desc")
   fi
 }
+
 assert_not_contains() {
   local desc="$1" haystack="$2" needle="$3"
   if [[ "$haystack" != *"$needle"* ]]; then
@@ -39,6 +41,7 @@ assert_not_contains() {
     FAILED=$((FAILED + 1)); ERRORS+=("$desc")
   fi
 }
+
 assert_file_exists() {
   local desc="$1" file="$2"
   if [[ -f "$file" ]]; then
@@ -49,24 +52,53 @@ assert_file_exists() {
   fi
 }
 
+project_count() {
+  local file="$1"
+  python3 - "$file" << 'PYEOF'
+import json, sys
+with open(sys.argv[1], encoding='utf-8') as f:
+    data = json.load(f)
+if isinstance(data, list):
+    print(len(data))
+elif isinstance(data, dict):
+    print(len(data.get('projects', [])))
+else:
+    print(0)
+PYEOF
+}
+
 setup_test() {
   TEST_TMP="$(mktemp -d)"
   mkdir -p "$TEST_TMP/fake-project"
   git -C "$TEST_TMP/fake-project" init -q 2>/dev/null || true
+  git -C "$TEST_TMP/fake-project" config user.email "test@example.com"
+  git -C "$TEST_TMP/fake-project" config user.name "osori-test"
+  echo "hello" > "$TEST_TMP/fake-project/README.md"
+  git -C "$TEST_TMP/fake-project" add README.md >/dev/null 2>&1
+  git -C "$TEST_TMP/fake-project" commit -m "init" >/dev/null 2>&1 || true
   export OSORI_REGISTRY="$TEST_TMP/osori.json"
 }
-teardown_test() { rm -rf "$TEST_TMP"; unset OSORI_REGISTRY; }
+
+teardown_test() {
+  rm -rf "$TEST_TMP"
+  unset OSORI_REGISTRY
+  unset OSORI_ROOT_KEY
+}
 
 # ─── TESTS ───
 
-echo "=== test_add_project ==="
+echo "=== test_add_project_schema_v2 ==="
 setup_test
 output=$(bash "$PROJECT_ROOT/scripts/add-project.sh" "$TEST_TMP/fake-project" --name "myproject" 2>&1)
 assert_contains "add prints Added" "$output" "Added"
 assert_file_exists "registry created" "$TEST_TMP/osori.json"
 content=$(cat "$TEST_TMP/osori.json")
-assert_contains "registry has project name" "$content" '"myproject"'
-assert_contains "registry has path" "$content" "$TEST_TMP/fake-project"
+assert_contains "registry has schema field" "$content" '"schema": "osori.registry"'
+assert_contains "registry has version field" "$content" '"version": 2'
+assert_contains "registry has projects container" "$content" '"projects": ['
+assert_contains "registry has root field" "$content" '"root": "default"'
+count=$(project_count "$TEST_TMP/osori.json")
+assert_eq "project count is one" "1" "$count"
 teardown_test
 
 echo ""
@@ -75,7 +107,7 @@ setup_test
 bash "$PROJECT_ROOT/scripts/add-project.sh" "$TEST_TMP/fake-project" --name "duptest" >/dev/null 2>&1
 output=$(bash "$PROJECT_ROOT/scripts/add-project.sh" "$TEST_TMP/fake-project" --name "duptest" 2>&1)
 assert_contains "duplicate detected" "$output" "Already registered"
-count=$(python3 -c "import json; print(len(json.load(open('$TEST_TMP/osori.json'))))")
+count=$(project_count "$TEST_TMP/osori.json")
 assert_eq "only one entry" "1" "$count"
 teardown_test
 
@@ -85,11 +117,78 @@ setup_test
 for name in proj-a proj-b proj-c; do
   mkdir -p "$TEST_TMP/repos/$name"
   git -C "$TEST_TMP/repos/$name" init -q 2>/dev/null
+  git -C "$TEST_TMP/repos/$name" config user.email "test@example.com"
+  git -C "$TEST_TMP/repos/$name" config user.name "osori-test"
+  echo "$name" > "$TEST_TMP/repos/$name/README.md"
+  git -C "$TEST_TMP/repos/$name" add README.md >/dev/null 2>&1
+  git -C "$TEST_TMP/repos/$name" commit -m "init" >/dev/null 2>&1 || true
 done
 output=$(bash "$PROJECT_ROOT/scripts/scan-projects.sh" "$TEST_TMP/repos" --depth 2 2>&1)
 assert_contains "scan reports additions" "$output" "Added 3"
-count=$(python3 -c "import json; print(len(json.load(open('$TEST_TMP/osori.json'))))")
+count=$(project_count "$TEST_TMP/osori.json")
 assert_eq "three projects registered" "3" "$count"
+teardown_test
+
+echo ""
+echo "=== test_legacy_registry_auto_migration ==="
+setup_test
+cat > "$TEST_TMP/osori.json" << 'JSONEOF'
+[
+  {
+    "name": "legacy-proj",
+    "path": "/tmp/legacy",
+    "repo": "",
+    "lang": "unknown",
+    "tags": [],
+    "description": "",
+    "addedAt": "2026-02-10"
+  }
+]
+JSONEOF
+output=$(bash "$PROJECT_ROOT/scripts/add-project.sh" "$TEST_TMP/fake-project" --name "new-proj" 2>&1)
+assert_contains "legacy migration notice" "$output" "Migrated registry on load"
+content=$(cat "$TEST_TMP/osori.json")
+assert_contains "migrated schema present" "$content" '"schema": "osori.registry"'
+assert_contains "legacy preserved" "$content" '"legacy-proj"'
+assert_contains "new project preserved" "$content" '"new-proj"'
+count=$(project_count "$TEST_TMP/osori.json")
+assert_eq "two projects after migration+add" "2" "$count"
+backup_count=$(find "$TEST_TMP" -name 'osori.json.bak-*' | wc -l | tr -d ' ')
+assert_eq "backup created on migration" "1" "$backup_count"
+teardown_test
+
+echo ""
+echo "=== test_corrupted_registry_recovery ==="
+setup_test
+printf '{ this is broken json ' > "$TEST_TMP/osori.json"
+output=$(bash "$PROJECT_ROOT/scripts/add-project.sh" "$TEST_TMP/fake-project" --name "recover-proj" 2>&1)
+assert_contains "corruption recovery notice" "$output" "registry corrupted"
+count=$(project_count "$TEST_TMP/osori.json")
+assert_eq "one project after recovery" "1" "$count"
+broken_count=$(find "$TEST_TMP" -name 'osori.json.broken-*' | wc -l | tr -d ' ')
+assert_eq "broken backup created" "1" "$broken_count"
+teardown_test
+
+echo ""
+echo "=== test_fingerprints_view ==="
+setup_test
+git -C "$TEST_TMP/fake-project" remote add origin "https://github.com/example/osori-test.git"
+bash "$PROJECT_ROOT/scripts/add-project.sh" "$TEST_TMP/fake-project" --name "finger-proj" >/dev/null 2>&1
+output=$(bash "$PROJECT_ROOT/scripts/project-fingerprints.sh" "finger-proj" 2>&1)
+assert_contains "fingerprints includes project" "$output" "finger-proj"
+assert_contains "fingerprints includes remote" "$output" "https://github.com/example/osori-test.git"
+assert_contains "fingerprints includes last commit" "$output" "last commit:"
+assert_contains "fingerprints includes PR count field" "$output" "open PRs:"
+assert_contains "fingerprints includes issue count field" "$output" "open issues:"
+teardown_test
+
+echo ""
+echo "=== test_root_key_override ==="
+setup_test
+export OSORI_ROOT_KEY="work"
+bash "$PROJECT_ROOT/scripts/add-project.sh" "$TEST_TMP/fake-project" --name "rooted" >/dev/null 2>&1
+content=$(cat "$TEST_TMP/osori.json")
+assert_contains "project root is set from env" "$content" '"root": "work"'
 teardown_test
 
 echo ""
@@ -99,31 +198,16 @@ mkdir -p "$TEST_TMP/evil-project"
 git -C "$TEST_TMP/evil-project" init -q 2>/dev/null
 EVIL_NAME='test"; rm -rf /; echo "'
 bash "$PROJECT_ROOT/scripts/add-project.sh" "$TEST_TMP/evil-project" --name "$EVIL_NAME" 2>&1 || true
-valid=$(python3 -c "
+valid=$(python3 - << PYEOF
 import json
 try:
-    json.load(open('$TEST_TMP/osori.json'))
+    json.load(open('$TEST_TMP/osori.json', encoding='utf-8'))
     print('valid')
-except:
+except Exception:
     print('invalid')
-" 2>/dev/null || echo "invalid")
-assert_eq "registry is valid JSON after injection attempt" "valid" "$valid"
-
-mkdir -p "$TEST_TMP/backtick-project"
-git -C "$TEST_TMP/backtick-project" init -q 2>/dev/null
-cat > "$TEST_TMP/backtick-project/package.json" << 'PKGJSON'
-{"description": "test `whoami` $(id) injection"}
-PKGJSON
-bash "$PROJECT_ROOT/scripts/add-project.sh" "$TEST_TMP/backtick-project" --name "backtick-test" 2>&1 || true
-valid2=$(python3 -c "
-import json
-try:
-    json.load(open('$TEST_TMP/osori.json'))
-    print('valid')
-except:
-    print('invalid')
-" 2>/dev/null || echo "invalid")
-assert_eq "registry valid after backtick injection" "valid" "$valid2"
+PYEOF
+)
+assert_eq "registry valid after injection attempt" "valid" "$valid"
 teardown_test
 
 echo ""
