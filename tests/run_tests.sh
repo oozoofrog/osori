@@ -170,6 +170,144 @@ assert_eq "broken backup created" "1" "$broken_count"
 teardown_test
 
 echo ""
+echo "=== test_doctor_detects_basic_issues ==="
+setup_test
+# create missing path project + invalid repo format
+cat > "$TEST_TMP/osori.json" << JSONEOF
+{
+  "schema": "osori.registry",
+  "version": 2,
+  "updatedAt": "2026-02-16T00:00:00Z",
+  "roots": [{"key": "default", "label": "Default", "paths": []}],
+  "projects": [
+    {
+      "name": "bad-path",
+      "path": "$TEST_TMP/no-such-dir",
+      "repo": "invalid repo format",
+      "lang": "unknown",
+      "tags": [],
+      "description": "",
+      "addedAt": "2026-02-16",
+      "root": "default"
+    }
+  ]
+}
+JSONEOF
+out=$(bash "$PROJECT_ROOT/scripts/doctor.sh" 2>&1 || true)
+assert_contains "doctor detects missing path" "$out" "project.path_missing"
+assert_contains "doctor detects invalid repo" "$out" "project.repo_invalid_format"
+teardown_test
+
+echo ""
+echo "=== test_doctor_detects_duplicates ==="
+setup_test
+cat > "$TEST_TMP/osori.json" << JSONEOF
+{
+  "schema": "osori.registry",
+  "version": 2,
+  "updatedAt": "2026-02-16T00:00:00Z",
+  "roots": [{"key": "default", "label": "Default", "paths": []}],
+  "projects": [
+    {"name": "dup", "path": "$TEST_TMP/fake-project", "repo": "", "lang": "unknown", "tags": [], "description": "", "addedAt": "2026-02-16", "root": "default"},
+    {"name": "dup", "path": "$TEST_TMP/fake-project", "repo": "", "lang": "unknown", "tags": [], "description": "", "addedAt": "2026-02-16", "root": "default"}
+  ]
+}
+JSONEOF
+out=$(bash "$PROJECT_ROOT/scripts/doctor.sh" 2>&1 || true)
+assert_contains "doctor duplicate name" "$out" "project.duplicate_name"
+assert_contains "doctor duplicate path" "$out" "project.duplicate_path"
+teardown_test
+
+echo ""
+echo "=== test_doctor_detects_root_reference_missing ==="
+setup_test
+cat > "$TEST_TMP/osori.json" << JSONEOF
+{
+  "schema": "osori.registry",
+  "version": 2,
+  "updatedAt": "2026-02-16T00:00:00Z",
+  "roots": [{"key": "default", "label": "Default", "paths": []}],
+  "projects": [
+    {"name": "x", "path": "$TEST_TMP/fake-project", "repo": "", "lang": "unknown", "tags": [], "description": "", "addedAt": "2026-02-16", "root": "work"}
+  ]
+}
+JSONEOF
+out=$(bash "$PROJECT_ROOT/scripts/doctor.sh" 2>&1 || true)
+assert_contains "doctor root mismatch" "$out" "project.root_reference_missing"
+teardown_test
+
+echo ""
+echo "=== test_doctor_json_output ==="
+setup_test
+out_json=$(bash "$PROJECT_ROOT/scripts/doctor.sh" --json 2>&1)
+assert_contains "doctor json has status" "$out_json" '"status"'
+assert_contains "doctor json has counts" "$out_json" '"counts"'
+assert_contains "doctor json has findings" "$out_json" '"findings"'
+teardown_test
+
+echo ""
+echo "=== test_doctor_fix_legacy_migration ==="
+setup_test
+cat > "$TEST_TMP/osori.json" << 'JSONEOF'
+[
+  {
+    "name": "legacy-proj",
+    "path": "/tmp/legacy",
+    "repo": "",
+    "lang": "unknown",
+    "tags": [],
+    "description": "",
+    "addedAt": "2026-02-10"
+  }
+]
+JSONEOF
+out=$(bash "$PROJECT_ROOT/scripts/doctor.sh" --fix 2>&1)
+assert_contains "doctor fix migration info" "$out" "fix.migration_applied"
+content=$(cat "$TEST_TMP/osori.json")
+assert_contains "doctor fix migrated schema" "$content" '"schema": "osori.registry"'
+teardown_test
+
+echo ""
+echo "=== test_doctor_fix_dedupe ==="
+setup_test
+cat > "$TEST_TMP/osori.json" << JSONEOF
+{
+  "schema": "osori.registry",
+  "version": 2,
+  "updatedAt": "2026-02-16T00:00:00Z",
+  "roots": [{"key": "default", "label": "Default", "paths": []}],
+  "projects": [
+    {"name": "dup", "path": "$TEST_TMP/fake-project", "repo": "", "lang": "unknown", "tags": [], "description": "", "addedAt": "2026-02-16", "root": "default"},
+    {"name": "dup", "path": "$TEST_TMP/fake-project", "repo": "", "lang": "unknown", "tags": [], "description": "", "addedAt": "2026-02-16", "root": "default"}
+  ]
+}
+JSONEOF
+out=$(bash "$PROJECT_ROOT/scripts/doctor.sh" --fix 2>&1)
+assert_contains "doctor fix dedupe message" "$out" "fix.dedupe_applied"
+count=$(project_count "$TEST_TMP/osori.json")
+assert_eq "doctor fix removed duplicate" "1" "$count"
+teardown_test
+
+echo ""
+echo "=== test_doctor_fix_corrupted_registry ==="
+setup_test
+printf '{ broken json' > "$TEST_TMP/osori.json"
+out=$(bash "$PROJECT_ROOT/scripts/doctor.sh" --fix 2>&1)
+assert_contains "doctor corrupted detected" "$out" "registry.corrupted"
+count=$(project_count "$TEST_TMP/osori.json")
+assert_eq "doctor fix reinitialized registry" "0" "$count"
+broken_count=$(find "$TEST_TMP" -name 'osori.json.broken-*' | wc -l | tr -d ' ')
+assert_eq "doctor fix saved broken backup" "1" "$broken_count"
+teardown_test
+
+echo ""
+echo "=== test_telegram_doctor_command ==="
+setup_test
+doctor_out=$(bash "$PROJECT_ROOT/scripts/telegram-commands.sh" doctor --json 2>&1)
+assert_contains "telegram doctor returns json" "$doctor_out" '"status"'
+teardown_test
+
+echo ""
 echo "=== test_fingerprints_view ==="
 setup_test
 git -C "$TEST_TMP/fake-project" remote add origin "https://github.com/example/osori-test.git"
