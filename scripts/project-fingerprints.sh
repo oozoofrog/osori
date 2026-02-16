@@ -36,15 +36,13 @@ OSORI_REG="$REGISTRY_FILE" \
 OSORI_QUERY="$QUERY" \
 OSORI_ROOT_FILTER="$ROOT_FILTER" \
 python3 << 'PYEOF'
-import json
 import os
-import shutil
 import subprocess
 import sys
 from typing import List
 
 sys.path.insert(0, os.environ["OSORI_SCRIPT_DIR"])
-from github_cache import DEFAULT_CACHE_PATH, get_open_count
+from github_cache import DEFAULT_CACHE_PATH, gh_count
 from registry_lib import filter_projects, load_registry, parse_repo_from_remote, registry_projects, resolve_alias
 
 
@@ -61,30 +59,6 @@ try:
     CACHE_TTL = int(os.environ.get("OSORI_CACHE_TTL", "600"))
 except Exception:
     CACHE_TTL = 600
-
-
-def gh_count(kind: str, repo: str):
-    if not repo or shutil.which("gh") is None:
-        return "n/a"
-
-    def fetch() -> int | None:
-        cmd = ["gh", kind, "list", "-R", repo, "--state", "open", "--json", "number", "--limit", "200"]
-        rc, out, _ = run(cmd, timeout=12)
-        if rc != 0 or not out:
-            return None
-        try:
-            return len(json.loads(out))
-        except Exception:
-            return None
-
-    value, _state = get_open_count(
-        kind=kind,
-        repo=repo,
-        ttl_seconds=CACHE_TTL,
-        cache_path=CACHE_PATH,
-        fetch_open_count=fetch,
-    )
-    return value
 
 
 query = os.environ.get("OSORI_QUERY", "").strip()
@@ -150,8 +124,8 @@ for p in projects:
     else:
         commit_str = "n/a"
 
-    pr_count = gh_count("pr", repo)
-    issue_count = gh_count("issue", repo)
+    pr_count = gh_count("pr", repo, ttl_seconds=CACHE_TTL, cache_path=CACHE_PATH)
+    issue_count = gh_count("issue", repo, ttl_seconds=CACHE_TTL, cache_path=CACHE_PATH)
 
     print(f"  - path: {path}")
     print(f"  - remote: {remote or 'n/a'}")

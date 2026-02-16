@@ -167,3 +167,48 @@ def get_open_count(
     cache_entries[key] = {"value": value_int, "fetchedAt": now}
     save_cache(cache, cache_path)
     return str(value_int), "miss"
+
+
+# ── High-level helper ────────────────────────────────
+
+def gh_count(
+    kind: str,
+    repo: str,
+    ttl_seconds: int = 600,
+    cache_path: str | None = None,
+) -> str:
+    """Return open PR or issue count as a string (or 'n/a').
+
+    Uses gh CLI to fetch and the TTL cache to avoid API spam.
+    """
+    import json
+    import shutil
+    import subprocess
+
+    if not repo or shutil.which("gh") is None:
+        return "n/a"
+
+    def _run(cmd, timeout=12):
+        try:
+            p = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+            return p.returncode, p.stdout.strip()
+        except Exception:
+            return 1, ""
+
+    def fetch():
+        rc, out = _run(["gh", kind, "list", "-R", repo, "--state", "open", "--json", "number", "--limit", "200"])
+        if rc != 0 or not out:
+            return None
+        try:
+            return len(json.loads(out))
+        except Exception:
+            return None
+
+    value, _state = get_open_count(
+        kind=kind,
+        repo=repo,
+        ttl_seconds=ttl_seconds,
+        cache_path=cache_path or DEFAULT_CACHE_PATH,
+        fetch_open_count=fetch,
+    )
+    return value

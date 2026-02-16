@@ -1,14 +1,12 @@
 #!/usr/bin/env python3
 """Osori switch command handler."""
 
-import json
 import os
-import shutil
 import subprocess
 import sys
 
 sys.path.insert(0, os.environ["OSORI_SCRIPT_DIR"])
-from github_cache import DEFAULT_CACHE_PATH, get_open_count
+from github_cache import DEFAULT_CACHE_PATH, gh_count
 from registry_lib import (
     filter_projects,
     load_registry,
@@ -34,29 +32,6 @@ try:
 except Exception:
     CACHE_TTL = 600
 CACHE_PATH = os.environ.get("OSORI_CACHE_FILE", DEFAULT_CACHE_PATH)
-
-
-def gh_count(kind, repo):
-    if not repo or shutil.which("gh") is None:
-        return "n/a"
-
-    def fetch():
-        rc, out, _ = run(["gh", kind, "list", "-R", repo, "--state", "open", "--json", "number", "--limit", "200"], timeout=12)
-        if rc != 0 or not out:
-            return None
-        try:
-            return len(json.loads(out))
-        except Exception:
-            return None
-
-    value, _state = get_open_count(
-        kind=kind,
-        repo=repo,
-        ttl_seconds=CACHE_TTL,
-        cache_path=CACHE_PATH,
-        fetch_open_count=fetch,
-    )
-    return value
 
 
 def git_last_commit(path):
@@ -252,8 +227,8 @@ else:
 print("\n🧬 Fingerprint:")
 print(f"  - remote: {remote or 'n/a'}")
 print(f"  - last commit: {last_commit}")
-print(f"  - open PRs: {gh_count('pr', repo)}")
-print(f"  - open issues: {gh_count('issue', repo)}")
+print(f"  - open PRs: {gh_count('pr', repo, ttl_seconds=CACHE_TTL, cache_path=CACHE_PATH)}")
+print(f"  - open issues: {gh_count('issue', repo, ttl_seconds=CACHE_TTL, cache_path=CACHE_PATH)}")
 
 if res.migrated:
     notes = '; '.join(res.migration_notes)
