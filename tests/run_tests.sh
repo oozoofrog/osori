@@ -406,6 +406,23 @@ assert_contains "root-manager remove path" "$path_remove_out" "Removed path from
 
 list2=$(bash "$PROJECT_ROOT/scripts/root-manager.sh" list 2>&1)
 assert_not_contains "root-manager path removed from list" "$list2" "$TEST_TMP/root-work"
+
+remove_default_out=$(bash "$PROJECT_ROOT/scripts/root-manager.sh" remove default 2>&1 || true)
+assert_contains "root-manager blocks default remove" "$remove_default_out" "cannot remove protected root: default"
+
+export OSORI_ROOT_KEY="work"
+bash "$PROJECT_ROOT/scripts/add-project.sh" "$TEST_TMP/fake-project" --name "work-owned" >/dev/null 2>&1
+
+remove_block_out=$(bash "$PROJECT_ROOT/scripts/root-manager.sh" remove work 2>&1 || true)
+assert_contains "root-manager blocks remove when projects exist" "$remove_block_out" "has 1 project(s)"
+
+remove_reassign_out=$(bash "$PROJECT_ROOT/scripts/root-manager.sh" remove work --reassign default 2>&1)
+assert_contains "root-manager reassign then remove" "$remove_reassign_out" "reassigned 1 project(s)"
+assert_contains "root-manager removed root after reassign" "$remove_reassign_out" "removed root: work"
+
+post_remove=$(cat "$TEST_TMP/osori.json")
+assert_not_contains "root-manager removed root from registry" "$post_remove" '"key": "work"'
+assert_contains "root-manager project reassigned to default" "$post_remove" '"root": "default"'
 teardown_test
 
 echo ""
@@ -433,8 +450,20 @@ assert_contains "telegram list-roots shows path" "$roots_after" "$TEST_TMP/tg-ro
 root_path_remove_out=$(bash "$PROJECT_ROOT/scripts/telegram-commands.sh" root-path-remove work "$TEST_TMP/tg-root-path" 2>&1)
 assert_contains "telegram root-path-remove works" "$root_path_remove_out" "Removed path from root 'work'"
 
+# remove safety via telegram wrapper
+export OSORI_ROOT_KEY="work"
+bash "$PROJECT_ROOT/scripts/add-project.sh" "$TEST_TMP/fake-project" --name "tg-work-owned" >/dev/null 2>&1
+
+root_remove_block=$(bash "$PROJECT_ROOT/scripts/telegram-commands.sh" root-remove work 2>&1 || true)
+assert_contains "telegram root-remove blocks when projects exist" "$root_remove_block" "has 1 project(s)"
+
+root_remove_force=$(bash "$PROJECT_ROOT/scripts/telegram-commands.sh" root-remove work --force 2>&1)
+assert_contains "telegram root-remove force message" "$root_remove_force" "force mode"
+assert_contains "telegram root-remove force removed" "$root_remove_force" "removed root: work"
+
 roots_final=$(bash "$PROJECT_ROOT/scripts/telegram-commands.sh" list-roots 2>&1)
 assert_not_contains "telegram list-roots path removed" "$roots_final" "$TEST_TMP/tg-root-path"
+assert_not_contains "telegram list-roots removed root hidden" "$roots_final" "work"
 teardown_test
 
 echo ""

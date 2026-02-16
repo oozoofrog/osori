@@ -1,6 +1,6 @@
 ---
 name: osori
-description: "Osori v1.5.0-rc1 — Local project registry & context loader with Telegram slash commands. Registry versioning + auto-migration + fingerprints view + root filters + root management + doctor health checks. Find, switch, list, add/remove projects, check status. Triggers: work on X, find project X, list projects, project status, project switch. | 오소리 — 텔레그램 슬래시 명령어 지원 로컬 프로젝트 레지스트리."
+description: "Osori v1.5.0-rc1 — Local project registry & context loader with Telegram slash commands. Registry versioning + auto-migration + fingerprints view + root filters + root management + doctor health checks + safe root remove. Find, switch, list, add/remove projects, check status. Triggers: work on X, find project X, list projects, project status, project switch. | 오소리 — 텔레그램 슬래시 명령어 지원 로컬 프로젝트 레지스트리."
 ---
 
 # Osori (오소리)
@@ -33,6 +33,7 @@ Osori now supports Telegram slash commands for quick project management:
 /root-path-add <key> <path> — Add discovery path to root
 /root-path-remove <key> <path> — Remove discovery path from root
 /root-set-label <key> <label> — Update root label
+/root-remove <key> [--reassign <target>] [--force] — Safely remove root
 /add <path> — Add project to registry
 /remove <name> — Remove project from registry
 /scan <path> [root] — Scan directory for git projects, optional root key
@@ -56,6 +57,7 @@ root-add - Add root
 root-path-add - Add path to root
 root-path-remove - Remove path from root
 root-set-label - Rename root label
+root-remove - Safely remove root (with reassign/force options)
 add - Add project to registry
 remove - Remove project
 scan - Scan directory (optional root)
@@ -74,6 +76,7 @@ help - Show help
 /list-roots
 /root-add work Work
 /root-path-add work /path/to/workspace
+/root-remove work --reassign default
 /add /Volumes/disk/MyProject
 /scan /path/to/workspace work
 ```
@@ -203,6 +206,7 @@ bash skills/osori/scripts/doctor.sh [--fix] [--json]
 /root-path-add <key> <path>
 /root-path-remove <key> <path>
 /root-set-label <key> <label>
+/root-remove <key> [--reassign <target>] [--force]
 ```
 
 Shell equivalents:
@@ -213,7 +217,14 @@ bash skills/osori/scripts/root-manager.sh add <key> [label]
 bash skills/osori/scripts/root-manager.sh path-add <key> <path>
 bash skills/osori/scripts/root-manager.sh path-remove <key> <path>
 bash skills/osori/scripts/root-manager.sh set-label <key> <label>
+bash skills/osori/scripts/root-manager.sh remove <key> [--reassign <target>] [--force]
 ```
+
+Safety rules for remove:
+- `default` root cannot be removed
+- if projects exist in root:
+  - `--reassign <target>` to move projects then remove
+  - or `--force` to move projects to `default` and remove
 
 ## Schema
 
