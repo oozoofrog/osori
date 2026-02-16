@@ -300,6 +300,47 @@ assert_not_contains "telegram list-roots path removed" "$roots_final" "$TEST_TMP
 teardown_test
 
 echo ""
+echo "=== test_switch_multimatch_auto_and_index ==="
+setup_test
+
+mkdir -p "$TEST_TMP/mm-demo" "$TEST_TMP/mm-demo-app"
+for p in "$TEST_TMP/mm-demo" "$TEST_TMP/mm-demo-app"; do
+  git -C "$p" init -q 2>/dev/null
+  git -C "$p" config user.email "test@example.com"
+  git -C "$p" config user.name "osori-test"
+  echo "x" > "$p/README.md"
+  git -C "$p" add README.md >/dev/null 2>&1
+  GIT_AUTHOR_DATE="2026-02-15T10:00:00" GIT_COMMITTER_DATE="2026-02-15T10:00:00" git -C "$p" commit -m "init" >/dev/null 2>&1 || true
+done
+
+cat > "$TEST_TMP/osori.json" << JSONEOF
+{
+  "schema": "osori.registry",
+  "version": 2,
+  "updatedAt": "2026-02-16T00:00:00Z",
+  "roots": [{"key": "default", "label": "Default", "paths": []}],
+  "projects": [
+    {"name": "demo", "path": "$TEST_TMP/mm-demo", "repo": "", "lang": "unknown", "tags": [], "description": "", "addedAt": "2026-02-16", "root": "default"},
+    {"name": "demo-app", "path": "$TEST_TMP/mm-demo-app", "repo": "", "lang": "unknown", "tags": [], "description": "", "addedAt": "2026-02-16", "root": "default"},
+    {"name": "demo-missing", "path": "$TEST_TMP/no-such-dir", "repo": "", "lang": "unknown", "tags": [], "description": "", "addedAt": "2026-02-16", "root": "default"}
+  ]
+}
+JSONEOF
+
+auto_out=$(bash "$PROJECT_ROOT/scripts/telegram-commands.sh" switch demo 2>&1)
+assert_contains "switch shows multiple candidates" "$auto_out" "Multiple matches (3)"
+assert_contains "switch auto-select message" "$auto_out" "Auto-selected #1"
+assert_contains "switch auto-select picks exact name" "$auto_out" "📁 *demo*"
+
+index_out=$(bash "$PROJECT_ROOT/scripts/telegram-commands.sh" switch demo --index 2 2>&1)
+assert_contains "switch index selection message" "$index_out" "Selected candidate #2"
+assert_contains "switch index picks second candidate" "$index_out" "📁 *demo-app*"
+
+bad_index_out=$(bash "$PROJECT_ROOT/scripts/telegram-commands.sh" switch demo --index 9 2>&1 || true)
+assert_contains "switch index out-of-range" "$bad_index_out" "--index out of range"
+teardown_test
+
+echo ""
 echo "=== test_switch_root_filter ==="
 setup_test
 export OSORI_ROOT_KEY="work"
